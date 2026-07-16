@@ -12,6 +12,7 @@
 
 import logging
 import time
+import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -59,6 +60,9 @@ class NewsDigestPipeline:
         # 初始化通知服务（复用现有）
         self.notifier = NotificationService()
 
+        # ===== 新增：标题到链接的映射表 =====
+        self.title_link_map = {}
+
         logger.info(f"新闻摘要管道初始化完成")
         logger.info(f"新闻话题: {', '.join(self.config.news_topics)}")
         logger.info(f"每话题最大文章数: {self.config.news_max_articles}")
@@ -102,6 +106,9 @@ class NewsDigestPipeline:
 
             logger.info(f"RSS 共获取 {len(all_news)} 条新闻，开始按话题过滤...")
 
+            # ===== 新增：清空并重新构建标题→链接映射 =====
+            self.title_link_map = {}
+
             # 按话题关键词过滤新闻（保留原有话题分类逻辑）
             for topic in topics:
                 # 话题关键词匹配（包含关键词则归入该话题）
@@ -112,6 +119,10 @@ class NewsDigestPipeline:
                     keywords = self._get_topic_keywords(topic)
                     if any(kw in title for kw in keywords):
                         filtered.append(news)
+                        # ===== 新增：保存标题→链接映射 =====
+                        link = news.get('link', '')
+                        if title and link:
+                            self.title_link_map[title] = link
                 
                 if filtered:
                     # 格式化为文本
@@ -133,13 +144,18 @@ class NewsDigestPipeline:
             if not topic_news and all_news:
                 lines = ["## 综合财经要闻"]
                 for i, news in enumerate(all_news[:max_articles * len(topics)], 1):
-                    lines.append(f"\n{i}. **{news.get('title', '')}**")
+                    title = news.get('title', '')
+                    lines.append(f"\n{i}. **{title}**")
                     if news.get('summary'):
                         lines.append(f"   摘要: {news['summary'][:200]}")
                     if news.get('source'):
                         lines.append(f"   来源: {news['source']}")
                     if news.get('published'):
                         lines.append(f"   时间: {news['published']}")
+                    # ===== 新增：保存标题→链接映射 =====
+                    link = news.get('link', '')
+                    if title and link:
+                        self.title_link_map[title] = link
                 topic_news["综合"] = "\n".join(lines)
                 logger.warning("没有按话题匹配到新闻，已将全部新闻放入'综合'话题")
 
@@ -317,8 +333,29 @@ class NewsDigestPipeline:
                         )
                         if art.get("key_point"):
                             lines.append(f"  {art['key_point']}")
-                        if art.get("source"):
-                            lines.append(f"  *来源: {art['source']}*")
+                        
+                        # ===== 修改开始：来源带链接 =====
+                        art_title = art.get('title', '')
+                        # 先从 art 中获取 link
+                        link = art.get('link', '')
+                        # 如果 art 中没有，从映射表中按标题查找
+                        if not link or not link.startswith('http'):
+                            if art_title in self.title_link_map:
+                                link = self.title_link_map[art_title]
+                        
+                        source_name = art.get('source', '未知来源')
+                        if link and link.startswith('http'):
+                            # 如果 source_name 是 Markdown 格式，提取纯名称
+                            if source_name.startswith('[') and '](' in source_name:
+                                match = re.search(r'\[([^\]]+)\]\([^)]+\)', source_name)
+                                if match:
+                                    source_name = match.group(1)
+                            lines.append(f"  *来源: [{source_name}]({link})*")
+                        else:
+                            # 没有链接时，显示纯文本来源（兼容旧逻辑）
+                            if source_name and not source_name.startswith('['):
+                                lines.append(f"  *来源: {source_name}*")
+                        # ===== 修改结束 =====
                     lines.append("")
 
                 lines.append("")
@@ -346,7 +383,7 @@ class NewsDigestPipeline:
             "",
             f"*📅 生成时间: {date_str} {time_str} (北京时间)*",
             "*🤖 AI 生成，仅供参考，不构成投资建议*",
-            "*数据来源: 搜索引擎聚合 (Tavily/Bocha/SerpAPI)*",
+            "*数据来源: NewsAPI*",  # ===== 修改：更新数据来源 =====
         ])
 
         return "\n".join(lines)
@@ -388,6 +425,8 @@ class NewsDigestPipeline:
         try:
             # Step 1: 拉取新闻
             logger.info("Step 1/4: 拉取金融新闻...")
+            # ===== 新增：在拉取前清空映射表 =====
+            self.title_link_map = {}
             topic_news = self.fetch_news(topics)
 
             if not topic_news:
