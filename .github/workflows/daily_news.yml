@@ -1,0 +1,218 @@
+name: 每小时金融新闻摘要
+
+on:
+  # 定时触发 - 每小时一次，北京时间 7:00-23:00 (UTC 23:00-15:00)，周一到周五
+  schedule:
+    - cron: '0 23 * * 1-5'     # UTC 23:00 = 北京时间 7:00
+    - cron: '0 0 * * 1-5'      # UTC 0:00 = 北京时间 8:00
+    - cron: '0 1 * * 1-5'      # UTC 1:00 = 北京时间 9:00
+    - cron: '0 2 * * 1-5'      # UTC 2:00 = 北京时间 10:00
+    - cron: '0 3 * * 1-5'      # UTC 3:00 = 北京时间 11:00
+    - cron: '0 4 * * 1-5'      # UTC 4:00 = 北京时间 12:00
+    - cron: '0 5 * * 1-5'      # UTC 5:00 = 北京时间 13:00
+    - cron: '0 6 * * 1-5'      # UTC 6:00 = 北京时间 14:00
+    - cron: '0 7 * * 1-5'      # UTC 7:00 = 北京时间 15:00
+    - cron: '0 8 * * 1-5'      # UTC 8:00 = 北京时间 16:00
+    - cron: '0 9 * * 1-5'      # UTC 9:00 = 北京时间 17:00
+    - cron: '0 10 * * 1-5'     # UTC 10:00 = 北京时间 18:00
+    - cron: '0 11 * * 1-5'     # UTC 11:00 = 北京时间 19:00
+    - cron: '0 12 * * 1-5'     # UTC 12:00 = 北京时间 20:00
+    - cron: '0 13 * * 1-5'     # UTC 13:00 = 北京时间 21:00
+    - cron: '0 14 * * 1-5'     # UTC 14:00 = 北京时间 22:00
+    - cron: '0 15 * * 1-5'     # UTC 15:00 = 北京时间 23:00
+
+  # 手动触发
+  workflow_dispatch:
+    inputs:
+      topics:
+        description: '新闻话题（逗号分隔，留空使用默认）'
+        required: false
+        default: ''
+        type: string
+      instruction:
+        description: '额外AI指令（如：重点关注美联储动向）'
+        required: false
+        default: ''
+        type: string
+
+# 并发控制：同一时间只运行一个摘要任务
+concurrency:
+  group: news-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    # 添加超时限制，防止任务卡死
+    timeout-minutes: 20
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 安装依赖
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 创建必要目录
+        run: |
+          mkdir -p data logs reports
+
+      - name: 执行金融新闻摘要
+        env:
+          # ==========================================
+          # AI 配置
+          # ==========================================
+          # Gemini AI（主选）
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || secrets.GEMINI_MODEL || 'gemini-2.5-flash' }}
+          GEMINI_MODEL_FALLBACK: ${{ vars.GEMINI_MODEL_FALLBACK || secrets.GEMINI_MODEL_FALLBACK || 'gemini-2.0-flash' }}
+          GEMINI_REQUEST_DELAY: '3.0'
+
+          # OpenAI 兼容 API（备选）
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL || secrets.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || secrets.OPENAI_MODEL }}
+
+          # ==========================================
+          # 搜索引擎
+          # ==========================================
+          BOCHA_API_KEYS: ${{ secrets.BOCHA_API_KEYS }}
+          TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
+          SERPAPI_API_KEYS: ${{ secrets.SERPAPI_API_KEYS }}
+
+          # ==========================================
+          # 通知渠道（可同时配置多个，全部推送）
+          # ==========================================
+
+          # 方式一：企业微信 Webhook
+          WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
+
+          # 方式二：飞书 Webhook
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+
+          # 方式三：Telegram
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+          # 方式四：邮件
+          EMAIL_SENDER: ${{ vars.EMAIL_SENDER || secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECEIVERS: ${{ vars.EMAIL_RECEIVERS || secrets.EMAIL_RECEIVERS }}
+
+          # 方式五：Pushover
+          PUSHOVER_USER_KEY: ${{ secrets.PUSHOVER_USER_KEY }}
+          PUSHOVER_API_TOKEN: ${{ secrets.PUSHOVER_API_TOKEN }}
+
+          # 方式六：PushPlus
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+
+          # 方式七：自定义 Webhook（钉钉、Bark、自建服务等）
+          CUSTOM_WEBHOOK_URLS: ${{ secrets.CUSTOM_WEBHOOK_URLS }}
+          CUSTOM_WEBHOOK_BEARER_TOKEN: ${{ secrets.CUSTOM_WEBHOOK_BEARER_TOKEN }}
+
+          # 方式八：Discord
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_MAIN_CHANNEL_ID: ${{ secrets.DISCORD_MAIN_CHANNEL_ID }}
+
+          # 方式九：飞书云文档
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_FOLDER_TOKEN: ${{ secrets.FEISHU_FOLDER_TOKEN }}
+
+          # ==========================================
+          # 新闻摘要配置
+          # ==========================================
+          NEWS_TOPICS: ${{ vars.NEWS_TOPICS || secrets.NEWS_TOPICS || '宏观经济,A股市场,行业动态,国际市场,政策法规' }}
+          NEWS_MAX_ARTICLES: ${{ vars.NEWS_MAX_ARTICLES || secrets.NEWS_MAX_ARTICLES || '5' }}
+          NEWS_DIGEST_SCHEDULE: ${{ vars.NEWS_DIGEST_SCHEDULE || secrets.NEWS_DIGEST_SCHEDULE || 'both' }}
+
+          # ==========================================
+          # 系统配置
+          # ==========================================
+          LOG_LEVEL: INFO
+          MAX_WORKERS: 1
+          # GitHub Actions 环境关闭数据源
+          ENABLE_CHIP_DISTRIBUTION: 'false'
+          ENABLE_REALTIME_QUOTE: 'false'
+
+        run: |
+          echo "=========================================="
+          echo "📰 金融新闻摘要系统"
+          echo "=========================================="
+          echo "⏰ 时间: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')"
+          echo "🏷️  新闻话题: $NEWS_TOPICS"
+          echo "📊 每话题最大文章数: $NEWS_MAX_ARTICLES"
+          echo ""
+          echo "=========================================="
+          echo "📋 配置检查"
+          echo "=========================================="
+          echo "【AI 配置】"
+          echo "  Gemini API Key: $([ -n "$GEMINI_API_KEY" ] && echo '✅ 已配置' || echo '❌ 未配置')"
+          echo "  OpenAI API Key: $([ -n "$OPENAI_API_KEY" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo ""
+          echo "【搜索引擎】"
+          echo "  Bocha API Keys: $([ -n "$BOCHA_API_KEYS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "  Tavily API Keys: $([ -n "$TAVILY_API_KEYS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo ""
+          echo "【通知渠道】"
+          echo "  PushPlus: $([ -n "$PUSHPLUS_TOKEN" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "  企业微信: $([ -n "$WECHAT_WEBHOOK_URL" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "  飞书: $([ -n "$FEISHU_WEBHOOK_URL" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "  Telegram: $([ -n "$TELEGRAM_BOT_TOKEN" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "  Discord: $([ -n "$DISCORD_WEBHOOK_URL" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "=========================================="
+          echo ""
+
+          # 构建命令行参数
+          CMD="python news_main.py"
+
+          # 手动触发：使用输入的话题
+          if [ -n "${{ github.event.inputs.topics }}" ]; then
+            CMD="$CMD --topics \"${{ github.event.inputs.topics }}\""
+          fi
+
+          # 手动触发：使用额外的AI指令
+          if [ -n "${{ github.event.inputs.instruction }}" ]; then
+            CMD="$CMD --instruction \"${{ github.event.inputs.instruction }}\""
+          fi
+
+          echo "执行命令: $CMD"
+          eval $CMD
+
+      - name: 上传摘要报告
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: news-digest-${{ github.run_number }}
+          path: |
+            reports/
+            logs/
+          retention-days: 30
+
+      - name: 显示运行结果
+        if: always()
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "📰 新闻摘要完成"
+          echo "=========================================="
+          if [ -d "reports" ] && [ "$(ls -A reports 2>/dev/null)" ]; then
+            echo "生成的报告:"
+            ls -la reports/
+          else
+            echo "⚠️ 未生成报告文件"
+          fi
+          echo ""
+          if [ -f "logs/news_digest_$(date +%Y%m%d).log" ]; then
+            echo "📜 最近日志（最后 30 行）:"
+            tail -30 logs/news_digest_*.log 2>/dev/null || echo "无日志"
+          fi
