@@ -8,17 +8,12 @@ logger = logging.getLogger(__name__)
 
 # 配置多个备用 RSS 源（新浪 + 和讯 + 东方财富）
 RSS_FEEDS = [
-    # 新浪财经
-    "http://rss.sina.com.cn/roll/finance/hot_roll.xml",
-    "http://rss.sina.com.cn/news/allnews/finance.xml",
-    "http://rss.sina.com.cn/finance/jsy.xml",
-    "http://rss.sina.com.cn/roll/stock/hot_roll.xml",
-    "http://rss.sina.com.cn/finance/fund.xml",
-    "http://rss.sina.com.cn/finance/usstock.xml",
-    # 和讯财经（备用）
-    "http://news.hexun.com/news_rss.xml",
-    # 东方财富（备用）
-    "http://news.eastmoney.com/rss/",
+    # 通过 RSSHub 代理获取（解决国外服务器无法访问国内 RSS 的问题）
+    "https://rsshub.app/sina/finance",          # 新浪财经
+    "https://rsshub.app/sina/rollnews/finance", # 新浪财经滚动
+    "https://rsshub.app/sina/stock",            # 新浪股市
+    "https://rsshub.app/wallstreet/hot",        # 华尔街见闻热榜
+    "https://rsshub.app/caixin/latest",         # 财新网最新
 ]
 
 def clean_html(raw: str) -> str:
