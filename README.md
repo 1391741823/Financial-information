@@ -1,97 +1,86 @@
-# 📈 股票智能分析系统
+# 📰 金融新闻摘要系统
 
-[![GitHub stars](https://img.shields.io/github/stars/ZhuLinsen/daily_stock_analysis?style=social)](https://github.com/ZhuLinsen/daily_stock_analysis/stargazers)
-[![CI](https://github.com/ZhuLinsen/daily_stock_analysis/actions/workflows/ci.yml/badge.svg)](https://github.com/ZhuLinsen/daily_stock_analysis/actions/workflows/ci.yml)
+[![GitHub stars](https://img.shields.io/github/stars/1391741823/Financial-information?style=social)](https://github.com/1391741823/Financial-information/stargazers)
+[![CI](https://github.com/1391741823/Financial-information/actions/workflows/news.yml/badge.svg)](https://github.com/1391741823/Financial-information/actions/workflows/news.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Ready-2088FF?logo=github-actions&logoColor=white)](https://github.com/features/actions)
 
-> 🤖 基于 AI 大模型的 A股/港股/美股自选股智能分析系统，每日自动分析并推送「决策仪表盘」到企业微信/飞书/Telegram/邮箱
+> 🤖 基于 NewsAPI + AI 大模型的国内金融新闻智能摘要系统，**每小时自动抓取**最新财经资讯，**AI 生成结构化摘要**，并通过飞书/企业微信/Telegram 等多渠道推送，让您**一分钟速览市场动态**。
 
-[English](docs/README_EN.md) | 简体中文
-
-![运行效果演示](./sources/all_2026-01-13_221547.gif)
+简体中文
 
 ## ✨ 功能特性
 
 ### 🎯 核心功能
-- **AI 决策仪表盘** - 一句话核心结论 + 精确买卖点位 + 检查清单
-- **多维度分析** - 技术面 + 筹码分布 + 舆情情报 + 实时行情
-- **大盘复盘** - 每日市场概览、板块涨跌、北向资金
-- **多渠道推送** - 支持企业微信、飞书、Telegram、邮件（自动识别）
-- **零成本部署** - GitHub Actions 免费运行，无需服务器
-- **💰 白嫖 Gemini API** - Google AI Studio 提供免费额度，个人使用完全够用
-- **🔄 多模型支持** - 支持 OpenAI 兼容 API（DeepSeek、通义千问等）作为备选
+- **智能新闻抓取** – 通过 NewsAPI 实时获取国内金融新闻（支持自定义搜索关键词）
+- **AI 结构化摘要** – 调用 OpenAI 兼容 API（支持 DeepSeek、通义千问等）或 Google Gemini 生成分类摘要
+- **自动话题分类** – 将新闻自动归入「宏观经济」「A股市场」「行业动态」「国际市场」「政策法规」等类别
+- **重点事件提炼** – AI 自动提取当日最重要的 5-8 条关键事件
+- **市场情绪判断** – 基于新闻内容给出「乐观/中性/谨慎/悲观」综合判断
+- **可点击链接** – 每条新闻来源均带原文链接，一键跳转详情
+- **多渠道推送** – 支持飞书、企业微信、Telegram、邮件、PushPlus、钉钉等
+- **零成本部署** – GitHub Actions 免费运行，无需服务器
 
 ### 📊 数据来源
-- **行情数据**: AkShare（免费）、Tushare、Baostock、YFinance
-- **新闻搜索**: Tavily、SerpAPI、Bocha
-- **AI 分析**: 
-  - 主力：Google Gemini（gemini-3-flash-preview）—— [免费获取](https://aistudio.google.com/)
-  - 备选：应大家要求，也支持了OpenAI 兼容 API（DeepSeek、通义千问、Moonshot 等）
+- **主要数据源**: NewsAPI（国际通用，GitHub Actions 环境下稳定可用）
+- **备用数据源**: 支持 Tushare、财联社快讯（`a-stock-data`）等扩展
+- **AI 模型**: 
+  - 主力：OpenAI 兼容 API（DeepSeek、通义千问、Moonshot 等，成本低廉）
+  - 备选：Google Gemini（免费额度）
 
-### 🛡️ 交易理念内置
-- ❌ **严禁追高** - 乖离率 > 5% 自动标记「危险」
-- ✅ **趋势交易** - MA5 > MA10 > MA20 多头排列
-- 📍 **精确点位** - 买入价、止损价、目标价
-- 📋 **检查清单** - 每项条件用 ✅⚠️❌ 标记
+### 🛡️ 输出格式
+- **📰 金融新闻早/晚报** – 每日自动生成
+- **分类汇总** – 每个话题下包含「要点」和具体新闻列表
+- **利好/利空标注** – 每条新闻带 📈/📉/➡️ 影响标记
+- **来源超链接** – 点击来源名称直接跳转原文
+- **关注前瞻** – AI 提示未来可能影响市场的关键事件
 
 ## 🚀 快速开始
 
 ### 方式一：GitHub Actions（推荐，零成本）
 
-**无需服务器，每天自动运行！**
+**无需服务器，每小时自动运行！**
 
-#### 1. Fork 本仓库(顺便点下⭐呀)
+#### 1. Fork 本仓库（顺便点个 ⭐ 呀）
 
-点击右上角 `Fork` 按钮
+点击右上角 `Fork` 按钮，将项目复制到你的 GitHub 账号。
 
 #### 2. 配置 Secrets
 
 进入你 Fork 的仓库 → `Settings` → `Secrets and variables` → `Actions` → `New repository secret`
 
-**AI 模型配置（二选一）**
+**必填配置**
 
-| Secret 名称 | 说明 | 必填 |
-|------------|------|:----:|
-| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/) 获取免费 Key | ✅* |
-| `OPENAI_API_KEY` | OpenAI 兼容 API Key（支持 DeepSeek、通义千问等） | 可选 |
-| `OPENAI_BASE_URL` | OpenAI 兼容 API 地址（如 `https://api.deepseek.com/v1`） | 可选 |
-| `OPENAI_MODEL` | 模型名称（如 `deepseek-chat`） | 可选 |
+| Secret 名称 | 说明 | 获取方式 |
+|------------|------|---------|
+| `NEWSAPI_KEY` | NewsAPI 密钥 | [newsapi.org](https://newsapi.org/register) 免费注册获取（每日 100 次请求） |
+| `OPENAI_API_KEY` | OpenAI 兼容 API Key | 推荐 [DeepSeek](https://platform.deepseek.com/) 或通义千问等，获取 API Key |
+| `FEISHU_WEBHOOK_URL` | 飞书机器人 Webhook | 飞书群 → 设置 → 群机器人 → 添加自定义机器人 |
 
-> *注：`GEMINI_API_KEY` 和 `OPENAI_API_KEY` 至少配置一个
+**可选配置（增强功能）**
 
-**通知渠道配置（可同时配置多个，全部推送）**
+| Secret 名称 | 说明 | 默认值 |
+|------------|------|--------|
+| `NEWSAPI_QUERY` | 自定义搜索关键词 | `中国 财经 金融 股市 央行` |
+| `OPENAI_BASE_URL` | OpenAI 兼容 API 地址 | 根据服务商填写（如 DeepSeek 为 `https://api.deepseek.com/v1`） |
+| `OPENAI_MODEL` | 使用的模型名称 | `deepseek-chat` |
+| `TUSHARE_TOKEN` | Tushare Token（备选数据源） | 可选 |
+| 其他推送渠道 | 企业微信、Telegram、邮件、PushPlus 等 | 可选，参考下方说明 |
 
-| Secret 名称 | 说明 | 必填 |
-|------------|------|:----:|
-| `WECHAT_WEBHOOK_URL` | 企业微信 Webhook URL | 可选 |
-| `FEISHU_WEBHOOK_URL` | 飞书 Webhook URL | 可选 |
-| `TELEGRAM_BOT_TOKEN` | Telegram Bot Token（@BotFather 获取） | 可选 |
-| `TELEGRAM_CHAT_ID` | Telegram Chat ID | 可选 |
-| `EMAIL_SENDER` | 发件人邮箱（如 `xxx@qq.com`） | 可选 |
-| `EMAIL_PASSWORD` | 邮箱授权码（非登录密码） | 可选 |
-| `EMAIL_RECEIVERS` | 收件人邮箱（多个用逗号分隔，留空则发给自己） | 可选 |
-| `PUSHPLUS_TOKEN` | PushPlus Token（[获取地址](https://www.pushplus.plus)，国内推送服务） | 可选 |
-| `CUSTOM_WEBHOOK_URLS` | 自定义 Webhook（支持钉钉等，多个用逗号分隔） | 可选 |
-| `CUSTOM_WEBHOOK_BEARER_TOKEN` | 自定义 Webhook 的 Bearer Token（用于需要认证的 Webhook） | 可选 |
-| `SINGLE_STOCK_NOTIFY` | 单股推送模式：设为 `true` 则每分析完一只股票立即推送 | 可选 |
-| `REPORT_TYPE` | 报告类型：`simple`(精简) 或 `full`(完整)，Docker环境推荐设为 `full` | 可选 |
-| `ANALYSIS_DELAY` | 个股分析和大盘分析之间的延迟（秒），避免API限流，如 `10` | 可选 |
+**推送渠道配置（可选，可同时配置多个）**
 
-> *注：至少配置一个渠道，配置多个则同时推送
->
-> 📖 更多配置（Pushover 手机推送、飞书云文档等）请参考 [完整配置指南](docs/full-guide.md)
+| Secret 名称 | 说明 |
+|------------|------|
+| `WECHAT_WEBHOOK_URL` | 企业微信 Webhook |
+| `TELEGRAM_BOT_TOKEN` | Telegram Bot Token（@BotFather 获取） |
+| `TELEGRAM_CHAT_ID` | Telegram Chat ID |
+| `PUSHPLUS_TOKEN` | PushPlus Token（国内推送服务） |
+| `EMAIL_SENDER` | 发件人邮箱（如 QQ 邮箱） |
+| `EMAIL_PASSWORD` | 邮箱授权码 |
+| `EMAIL_RECEIVERS` | 收件人邮箱（多个用逗号分隔） |
 
-**其他配置**
-
-| Secret 名称 | 说明 | 必填 |
-|------------|------|:----:|
-| `STOCK_LIST` | 自选股代码，如 `600519,hk00700,AAPL,TSLA` | ✅ |
-| `TAVILY_API_KEYS` | [Tavily](https://tavily.com/) 搜索 API（新闻搜索） | 推荐 |
-| `BOCHA_API_KEYS` | [博查搜索](https://open.bocha.cn/) Web Search API（中文搜索优化，支持AI摘要，多个key用逗号分隔） | 可选 |
-| `SERPAPI_API_KEYS` | [SerpAPI](https://serpapi.com/) 备用搜索 | 可选 |
-| `TUSHARE_TOKEN` | [Tushare Pro](https://tushare.pro/) Token | 可选 |
+> 💡 **至少配置一个通知渠道**，推荐飞书（配置简单，消息体验好）。
 
 #### 3. 启用 Actions
 
@@ -99,189 +88,127 @@
 
 #### 4. 手动测试
 
-`Actions` → `每日股票分析` → `Run workflow` → 选择模式 → `Run workflow`
+`Actions` → `每小时金融新闻摘要` → `Run workflow` → 选择分支 `main` → `Run workflow`
 
 #### 5. 完成！
 
-默认每个工作日 **18:00（北京时间）** 自动执行
+默认 **每个工作日 7:00-23:00（北京时间）每小时运行一次**，自动推送新闻摘要到你的飞书群。
 
 ### 方式二：本地运行 / Docker 部署
 
-> 📖 本地运行、Docker 部署详细步骤请参考 [完整配置指南](docs/full-guide.md)
+#### 本地运行
 
-## 📱 推送效果
+```bash
+# 1. 克隆仓库
+git clone https://github.com/1391741823/Financial-information.git
+cd Financial-information
 
-### 决策仪表盘
-```
-📊 2026-01-10 决策仪表盘
-3只股票 | 🟢买入:1 🟡观望:2 🔴卖出:0
+# 2. 创建虚拟环境（可选）
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-🟢 买入 | 贵州茅台(600519)
-📌 缩量回踩MA5支撑，乖离率1.2%处于最佳买点
-💰 狙击: 买入1800 | 止损1750 | 目标1900
-✅多头排列 ✅乖离安全 ✅量能配合
+# 3. 安装依赖
+pip install -r requirements.txt
 
-🟡 观望 | 宁德时代(300750)
-📌 乖离率7.8%超过5%警戒线，严禁追高
-⚠️ 等待回调至MA5附近再考虑
+# 4. 配置环境变量
+# 创建 .env 文件，填写以下内容：
+# NEWSAPI_KEY=你的Key
+# OPENAI_API_KEY=你的Key
+# FEISHU_WEBHOOK_URL=你的飞书Webhook
+# 其他可选配置...
 
----
-生成时间: 18:00
-```
+# 5. 运行
+python news_main.py
 
-### 大盘复盘
+飞书消息示例：
+📰 金融新闻晚报 | 2026-07-16 20:25
 
-![大盘复盘推送效果](./sources/dapan_2026-01-13_22-14-52.png)
+🎯 今日要闻: SK海力士美股上市大涨，长鑫科技IPO在即
+📊 市场情绪: 🟡 中性
 
-```
-🎯 2026-01-10 大盘复盘
+────────
 
-📊 主要指数
-- 上证指数: 3250.12 (🟢+0.85%)
-- 深证成指: 10521.36 (🟢+1.02%)
-- 创业板指: 2156.78 (🟢+1.35%)
+📊 A股市场 🔴
 
-📈 市场概况
-上涨: 3920 | 下跌: 1349 | 涨停: 155 | 跌停: 3
+**要点**: 证监会同意宇树科技科创板IPO注册，A股新版交易规则今日施行。
 
-🔥 板块表现
-领涨: 互联网服务、文化传媒、小金属
-领跌: 保险、航空机场、光伏设备
-```
+• 📈 **证监会同意宇树科技科创板IPO注册**
+  宇树科技科创板IPO获证监会注册同意，上市进程加速。
+  *来源: [36氪](https://36kr.com/p/xxx)*
 
-## ⚙️ 配置说明
+• 📈 **奥飞娱乐上半年净利润同比预增305.30%—413.38%**
+  奥飞娱乐预计上半年净利润1.5亿至1.9亿元，同比大幅增长。
+  *来源: [36氪](https://36kr.com/p/yyy)*
 
-> 📖 完整环境变量、定时任务配置请参考 [完整配置指南](docs/full-guide.md)
+🏭 行业动态 🔴
 
-## 🖥️ 本地 WebUI（可选）
+**要点**: 共享单车集体调价，起步价上调至1.88-1.99元/60分钟。
 
-本地运行时，可启用 WebUI 来管理配置和触发分析。
+• ➡️ **共享单车集体调价：起步价上调至1.88-1.99元/60分钟**
+  美团、青桔、哈啰单车在北京等城市上调起步价，行业迎来近年较大范围调价。
+  *来源: [金融时报](https://ft.com/...)*
 
-### 启动方式
+⚡ 重点关注事件
 
-| 命令 | 说明 |
-|------|------|
-| `python main.py --webui` | 启动 WebUI + 执行一次完整分析 |
-| `python main.py --webui-only` | 仅启动 WebUI，手动触发分析 |
+• SK海力士美股上市首日大涨近13%，创外资企业史上最大规模ADR。
+• 长鑫科技IPO进入倒计时，承销团阵容公布。
+• 共享单车行业集体调价，起步价上调至1.88-1.99元/60分钟。
 
-- 访问地址：`http://127.0.0.1:8000`
-- 详细说明请参考 [配置指南 - WebUI](docs/full-guide.md#本地-webui-管理界面)
+🔮 未来关注
 
-### 功能特性
+关注长鑫科技IPO发行进展及定价情况；SK海力士美股后续表现；三星与英伟达会晤结果。
 
-- 📝 **配置管理** - 查看/修改 `.env` 里的自选股列表
-- 🚀 **快速分析** - 页面输入股票代码，一键触发分析
-- 📊 **实时进度** - 分析任务状态实时更新，支持多任务并行
+────────
+📅 生成时间: 2026-07-16 20:25 (北京时间)
+🤖 AI 生成，仅供参考，不构成投资建议
+数据来源: NewsAPI
 
-### API 接口
+Financial-information/
+├── news_main.py              # 主程序入口
+├── src/
+│   ├── __init__.py
+│   ├── config.py             # 配置管理
+│   ├── analyzer.py           # AI 分析器（OpenAI/Gemini）
+│   ├── news_digest.py        # 新闻摘要管道（核心逻辑）
+│   ├── rss_fetcher.py        # 新闻获取模块（NewsAPI + 备用源）
+│   ├── notification.py       # 多渠道推送
+│   └── search_service.py     # 搜索服务（兼容旧逻辑）
+├── logs/                     # 日志目录
+├── reports/                  # 生成的报告文件
+├── .github/workflows/
+│   └── news.yml              # GitHub Actions 定时任务配置
+├── requirements.txt          # Python 依赖
+├── .env.example              # 环境变量示例
+└── README.md                 # 项目说明
 
-| 接口 | 方法 | 说明 |
-|------|------|------|
-| `/` | GET | 配置管理页面 |
-| `/health` | GET | 健康检查 |
-| `/analysis?code=xxx` | GET | 触发单只股票异步分析 |
-| `/tasks` | GET | 查询所有任务状态 |
-| `/task?id=xxx` | GET | 查询单个任务状态 |
+🗺️ Roadmap
+NewsAPI 新闻抓取
 
-## 📁 项目结构
+AI 结构化摘要生成
 
-```
-daily_stock_analysis/
-├── main.py              # 主程序入口
-├── webui.py             # WebUI 入口
-├── src/                 # 核心业务代码
-│   ├── analyzer.py      # AI 分析器（Gemini）
-│   ├── config.py        # 配置管理
-│   ├── notification.py  # 消息推送
-│   ├── storage.py       # 数据存储
-│   └── ...
-├── bot/                 # 机器人模块
-├── web/                 # WebUI 模块
-├── data_provider/       # 数据源适配器
-├── docker/              # Docker 配置
-│   ├── Dockerfile
-│   └── docker-compose.yml
-├── docs/                # 项目文档
-│   ├── full-guide.md    # 完整配置指南
-│   └── ...
-└── .github/workflows/   # GitHub Actions
-```
+飞书消息推送（带可点击链接）
 
-## 🗺️ Roadmap
+GitHub Actions 每小时定时运行
 
-> 📢 以下功能将视后续情况逐步完成，如果你有好的想法或建议，欢迎 [提交 Issue](https://github.com/ZhuLinsen/daily_stock_analysis/issues) 讨论！
+多话题自动分类
 
-### 🔔 通知渠道扩展
-- [x] 企业微信机器人
-- [x] 飞书机器人
-- [x] Telegram Bot
-- [x] 邮件通知（SMTP）
-- [x] 自定义 Webhook（支持钉钉、Discord、Slack、Bark 等）
-- [x] iOS/Android 推送（Pushover）
-- [x] 钉钉机器人 （已支持命令交互 >> [相关配置](docs/bot/dingding-bot-config.md)）
-### 🤖 AI 模型支持
-- [x] Google Gemini（主力，免费额度）
-- [x] OpenAI 兼容 API（支持 GPT-4/DeepSeek/通义千问/Claude/文心一言 等）
-- [x] 本地模型（Ollama）
+支持更多新闻源（财联社、华尔街见闻等）
 
-### 📊 数据源扩展
-- [x] AkShare（免费）
-- [x] Tushare Pro
-- [x] Baostock
-- [x] YFinance
+历史新闻存储与趋势分析
 
-### 🎯 功能增强
-- [x] 决策仪表盘
-- [x] 大盘复盘
-- [x] 定时推送
-- [x] GitHub Actions
-- [x] 港股支持
-- [x] Web 管理界面 (简易版)
-- [x] 美股支持
-- [ ] 历史分析回测
+用户自定义话题关键词
 
-## 🤝 贡献
+WebUI 配置管理界面
 
+🤝 贡献
 欢迎提交 Issue 和 Pull Request！
 
-详见 [贡献指南](docs/CONTRIBUTING.md)
+如果你有好的数据源建议或功能想法，请随时提出。
 
-## 📄 License
-[MIT License](LICENSE) © 2026 ZhuLinsen
+📄 License
+MIT License © 2026 1391741823
 
-如果你在项目中使用或基于本项目进行二次开发，
-非常欢迎在 README 或文档中注明来源并附上本仓库链接。
-这将有助于项目的持续维护和社区发展。
+⚠️ 免责声明
+本项目仅供学习和研究使用，不构成任何投资建议。新闻摘要由 AI 自动生成，可能存在不准确或不完整之处，请以官方信息为准。作者不对使用本项目产生的任何损失负责。
 
-## 📬 联系与合作
-- GitHub Issues：[提交 Issue](https://github.com/ZhuLinsen/daily_stock_analysis/issues)
-
-## ⭐ Star History
-
-<a href="https://star-history.com/#ZhuLinsen/daily_stock_analysis&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ZhuLinsen/daily_stock_analysis&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ZhuLinsen/daily_stock_analysis&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ZhuLinsen/daily_stock_analysis&type=Date" />
- </picture>
-</a>
-
-## ⚠️ 免责声明
-
-本项目仅供学习和研究使用，不构成任何投资建议。股市有风险，投资需谨慎。作者不对使用本项目产生的任何损失负责。
-
----
-
-**如果觉得有用，请给个 ⭐ Star 支持一下！**
-
-<!-- 赞赏锚点 -->
-<a id="sponsor"></a>
-###### ☕ 请我喝杯咖啡
-- 如果觉得本项目对你有帮助且行有余力，可以请我喝杯咖啡，支持项目的持续维护与迭代；不赞赏也完全不影响使用。   
-<small>（赞赏时可备注联系方式，方便私信致谢与后续交流反馈）</small>
-- 感谢支持, 祝您股市长虹，拿主力当提款机。
-
-<div align="center">
-  <img src="./sources/wechatpay.jpg" alt="WeChat Pay" width="200" style="margin-right: 20px;">
-  <img src="./sources/alipay.jpg" alt="Alipay" width="200">
-</div>
+如果觉得有用，请给个 ⭐ Star 支持一下！
