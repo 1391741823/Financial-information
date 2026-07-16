@@ -1,48 +1,62 @@
 # src/rss_fetcher.py
 import logging
+import os
 from typing import List, Dict
+import requests
 
 logger = logging.getLogger(__name__)
 
-def fetch_news_from_cls(limit: int = 20) -> List[Dict[str, str]]:
+NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
+
+def fetch_news_from_newsapi(limit: int = 20) -> List[Dict[str, str]]:
     """
-    使用 a-stock-data 获取财联社快讯
+    使用 NewsAPI 获取国内财经新闻
     """
+    if not NEWSAPI_KEY:
+        logger.warning("NEWSAPI_KEY 未配置")
+        return []
+
     try:
-        from a_stock_data import cls_news
+        url = "https://newsapi.org/v2/everything"
+        params = {
+            "q": "中国 财经 金融",  # 搜索关键词
+            "language": "zh",
+            "sortBy": "publishedAt",
+            "pageSize": limit,
+            "apiKey": NEWSAPI_KEY
+        }
         
-        # 获取财联社快讯
-        result = cls_news(limit=limit)
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
         
-        if not result:
-            logger.warning("财联社快讯返回空数据")
+        if data.get("status") != "ok":
+            logger.error(f"NewsAPI 返回错误: {data.get('message')}")
             return []
         
+        articles = data.get("articles", [])
         news_list = []
-        for item in result:
+        for article in articles:
             news_list.append({
-                "title": item.get("title", "") or item.get("content", "")[:50],
-                "summary": item.get("content", "")[:300] if item.get("content") else "",
-                "published": item.get("time", ""),
-                "source": "财联社",
-                "link": item.get("url", "")
+                "title": article.get("title", ""),
+                "summary": article.get("description", "")[:300] if article.get("description") else "",
+                "published": article.get("publishedAt", ""),
+                "source": article.get("source", {}).get("name", "NewsAPI"),
+                "link": article.get("url", "")
             })
         
-        logger.info(f"从财联社获取 {len(news_list)} 条新闻")
+        logger.info(f"从 NewsAPI 获取 {len(news_list)} 条新闻")
         return news_list
         
-    except ImportError:
-        logger.error("请安装 a-stock-data: pip install a-stock-data")
-        return []
     except Exception as e:
-        logger.error(f"财联社快讯获取失败: {e}")
+        logger.error(f"NewsAPI 获取新闻失败: {e}")
         return []
 
 def fetch_news_from_rss(limit_per_source: int = 5) -> List[Dict[str, str]]:
     """
-    主入口：优先使用财联社快讯
+    主入口：使用 NewsAPI
     """
-    news = fetch_news_from_cls(limit=limit_per_source * 3)
+    news = fetch_news_from_newsapi(limit=limit_per_source * 3)
     if news:
         return news
     
