@@ -61,7 +61,7 @@ class NewsDigestPipeline:
         self.notifier = NotificationService()
 
         # ================================================================
-        # 新增：标题到链接的映射表（用于在 format_digest 中生成可点击链接）
+        # 标题到链接的映射表（用于在 format_digest 中生成可点击链接）
         # ================================================================
         self.title_link_map = {}
 
@@ -98,9 +98,7 @@ class NewsDigestPipeline:
 
         logger.info(f"开始从 RSS 拉取金融新闻，共 {len(topics)} 个话题...")
 
-        # ================================================================
-        # 新增：每次拉取新闻前清空映射表，避免上一次的数据残留
-        # ================================================================
+        # 每次拉取新闻前清空映射表，避免上一次的数据残留
         self.title_link_map = {}
 
         try:
@@ -123,9 +121,7 @@ class NewsDigestPipeline:
                     keywords = self._get_topic_keywords(topic)
                     if any(kw in title for kw in keywords):
                         filtered.append(news)
-                        # ================================================
-                        # 新增：保存标题→链接映射
-                        # ================================================
+                        # 保存标题→链接映射
                         link = news.get('link', '')
                         if title and link:
                             self.title_link_map[title] = link
@@ -158,9 +154,7 @@ class NewsDigestPipeline:
                         lines.append(f"   来源: {news['source']}")
                     if news.get('published'):
                         lines.append(f"   时间: {news['published']}")
-                    # ================================================
-                    # 新增：保存标题→链接映射
-                    # ================================================
+                    # 保存标题→链接映射
                     link = news.get('link', '')
                     if title and link:
                         self.title_link_map[title] = link
@@ -325,12 +319,10 @@ class NewsDigestPipeline:
                 lines.append(f"## {icon} {title}{imp_mark}")
                 lines.append("")
 
-                # 分类摘要
                 if cat.get("summary"):
                     lines.append(f"**要点**: {cat['summary']}")
                     lines.append("")
 
-                # 文章列表
                 articles = cat.get("articles", [])
                 if articles:
                     for art in articles:
@@ -343,35 +335,69 @@ class NewsDigestPipeline:
                             lines.append(f"  {art['key_point']}")
 
                         # ================================================================
-                        # 来源带链接 - 使用多重匹配策略
+                        # 多重匹配策略：查找链接
                         # ================================================================
                         art_title = art.get('title', '')
+                        source_name = art.get('source', '')
                         link = art.get('link', '')
 
-                        # 策略1：如果 art 中有 link，直接使用
-                        if not link or not link.startswith('http'):
-                            # 策略2：按标题精确匹配
+                        # 如果 art 中有 link，直接使用
+                        if link and link.startswith('http'):
+                            pass  # 已有链接，跳过匹配
+                        else:
+                            link = None  # 重置，开始匹配
+
+                            # 策略1：精确匹配
                             if art_title in self.title_link_map:
                                 link = self.title_link_map[art_title]
 
-                        # 策略3：按来源名称匹配（当标题匹配失败时）
-                        if not link or not link.startswith('http'):
-                            source_name = art.get('source', '')
-                            for title, url in self.title_link_map.items():
-                                # 检查来源名称是否在映射表的标题中
-                                if source_name and source_name.lower() in title.lower():
-                                    link = url
-                                    break
-                                # 检查 AI 返回的标题是否在映射表的标题中（子串匹配）
-                                if len(art_title) > 5 and art_title in title:
-                                    link = url
-                                    break
-                                # 检查映射表的标题是否在 AI 返回的标题中
-                                if len(title) > 5 and title in art_title:
-                                    link = url
-                                    break
+                            # 策略2：去掉常见前缀后再匹配
+                            if not link:
+                                clean_title = art_title
+                                # 去掉常见的开头词
+                                prefixes = ["证监会同意", "央行", "国务院", "财政部", "工信部", "国家"]
+                                for prefix in prefixes:
+                                    if art_title.startswith(prefix):
+                                        clean_title = art_title[len(prefix):]
+                                        break
+                                if clean_title in self.title_link_map:
+                                    link = self.title_link_map[clean_title]
 
-                        source_name = art.get('source', '未知来源')
+                            # 策略3：来源名称匹配（如 "36氪" → 找到包含该来源的新闻）
+                            if not link and source_name:
+                                for title, url in self.title_link_map.items():
+                                    if source_name in title:
+                                        link = url
+                                        break
+
+                            # 策略4：子串匹配（AI标题在原始标题中，或反之）
+                            if not link and len(art_title) > 3:
+                                for title, url in self.title_link_map.items():
+                                    # AI标题是原始标题的子串
+                                    if art_title in title:
+                                        link = url
+                                        break
+                                    # 原始标题是AI标题的子串
+                                    if len(title) > 5 and title in art_title:
+                                        link = url
+                                        break
+
+                            # 策略5：关键词匹配（提取核心词汇）
+                            if not link:
+                                # 提取AI标题中的关键词（去掉常见停用词）
+                                stopwords = ["的", "了", "在", "是", "我", "有", "和", "就", "不", "人", "都", "一", "个", "上", "也", "很", "至", "月", "日", "年"]
+                                keywords = [w for w in art_title if w not in stopwords]
+                                if len(keywords) >= 3:
+                                    for title, url in self.title_link_map.items():
+                                        # 检查关键词是否都在原始标题中
+                                        matched = all(kw in title for kw in keywords)
+                                        if matched:
+                                            link = url
+                                            break
+
+                        # ================================================================
+                        # 生成显示
+                        # ================================================================
                         if link and link.startswith('http'):
                             # 如果 source_name 是 Markdown 格式，提取纯名称
                             if source_name.startswith('[') and '](' in source_name:
@@ -410,7 +436,7 @@ class NewsDigestPipeline:
             "",
             f"*📅 生成时间: {date_str} {time_str} (北京时间)*",
             "*🤖 AI 生成，仅供参考，不构成投资建议*",
-            "*数据来源: NewsAPI*",  # 修改：更新数据来源
+            "*数据来源: NewsAPI*",
         ])
 
         return "\n".join(lines)
@@ -452,9 +478,7 @@ class NewsDigestPipeline:
         try:
             # Step 1: 拉取新闻
             logger.info("Step 1/4: 拉取金融新闻...")
-            # ================================================================
-            # 新增：在拉取前清空映射表，确保本次任务使用干净的数据
-            # ================================================================
+            # 在拉取前清空映射表，确保本次任务使用干净的数据
             self.title_link_map = {}
             topic_news = self.fetch_news(topics)
 
