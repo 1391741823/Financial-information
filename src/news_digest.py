@@ -60,7 +60,9 @@ class NewsDigestPipeline:
         # 初始化通知服务（复用现有）
         self.notifier = NotificationService()
 
-        # ===== 新增：标题到链接的映射表 =====
+        # ================================================================
+        # 新增：标题到链接的映射表（用于在 format_digest 中生成可点击链接）
+        # ================================================================
         self.title_link_map = {}
 
         logger.info(f"新闻摘要管道初始化完成")
@@ -96,18 +98,20 @@ class NewsDigestPipeline:
 
         logger.info(f"开始从 RSS 拉取金融新闻，共 {len(topics)} 个话题...")
 
+        # ================================================================
+        # 新增：每次拉取新闻前清空映射表，避免上一次的数据残留
+        # ================================================================
+        self.title_link_map = {}
+
         try:
             # 从 RSS 获取新闻
             all_news = fetch_news_from_rss(limit_per_source=max_articles)
-            
+
             if not all_news:
                 logger.warning("RSS 未获取到任何新闻")
                 return topic_news
 
             logger.info(f"RSS 共获取 {len(all_news)} 条新闻，开始按话题过滤...")
-
-            # ===== 新增：清空并重新构建标题→链接映射 =====
-            self.title_link_map = {}
 
             # 按话题关键词过滤新闻（保留原有话题分类逻辑）
             for topic in topics:
@@ -119,11 +123,13 @@ class NewsDigestPipeline:
                     keywords = self._get_topic_keywords(topic)
                     if any(kw in title for kw in keywords):
                         filtered.append(news)
-                        # ===== 新增：保存标题→链接映射 =====
+                        # ================================================
+                        # 新增：保存标题→链接映射
+                        # ================================================
                         link = news.get('link', '')
                         if title and link:
                             self.title_link_map[title] = link
-                
+
                 if filtered:
                     # 格式化为文本
                     lines = [f"## {topic}"]
@@ -152,7 +158,9 @@ class NewsDigestPipeline:
                         lines.append(f"   来源: {news['source']}")
                     if news.get('published'):
                         lines.append(f"   时间: {news['published']}")
-                    # ===== 新增：保存标题→链接映射 =====
+                    # ================================================
+                    # 新增：保存标题→链接映射
+                    # ================================================
                     link = news.get('link', '')
                     if title and link:
                         self.title_link_map[title] = link
@@ -333,16 +341,17 @@ class NewsDigestPipeline:
                         )
                         if art.get("key_point"):
                             lines.append(f"  {art['key_point']}")
-                        
-                        # ===== 修改开始：来源带链接 =====
+
+                        # ================================================================
+                        # 修改开始：来源带链接
+                        # 优先从 art 中获取 link，如果没有则从 self.title_link_map 按标题匹配
+                        # ================================================================
                         art_title = art.get('title', '')
-                        # 先从 art 中获取 link
                         link = art.get('link', '')
-                        # 如果 art 中没有，从映射表中按标题查找
                         if not link or not link.startswith('http'):
                             if art_title in self.title_link_map:
                                 link = self.title_link_map[art_title]
-                        
+
                         source_name = art.get('source', '未知来源')
                         if link and link.startswith('http'):
                             # 如果 source_name 是 Markdown 格式，提取纯名称
@@ -351,11 +360,12 @@ class NewsDigestPipeline:
                                 if match:
                                     source_name = match.group(1)
                             lines.append(f"  *来源: [{source_name}]({link})*")
-                        else:
-                            # 没有链接时，显示纯文本来源（兼容旧逻辑）
-                            if source_name and not source_name.startswith('['):
-                                lines.append(f"  *来源: {source_name}*")
-                        # ===== 修改结束 =====
+                        elif source_name and not source_name.startswith('['):
+                            lines.append(f"  *来源: {source_name}*")
+                        # ================================================================
+                        # 修改结束
+                        # ================================================================
+
                     lines.append("")
 
                 lines.append("")
@@ -383,7 +393,7 @@ class NewsDigestPipeline:
             "",
             f"*📅 生成时间: {date_str} {time_str} (北京时间)*",
             "*🤖 AI 生成，仅供参考，不构成投资建议*",
-            "*数据来源: NewsAPI*",  # ===== 修改：更新数据来源 =====
+            "*数据来源: NewsAPI*",  # 修改：更新数据来源
         ])
 
         return "\n".join(lines)
@@ -425,7 +435,9 @@ class NewsDigestPipeline:
         try:
             # Step 1: 拉取新闻
             logger.info("Step 1/4: 拉取金融新闻...")
-            # ===== 新增：在拉取前清空映射表 =====
+            # ================================================================
+            # 新增：在拉取前清空映射表，确保本次任务使用干净的数据
+            # ================================================================
             self.title_link_map = {}
             topic_news = self.fetch_news(topics)
 
