@@ -20,6 +20,8 @@ from src.config import get_config, Config
 from src.search_service import SearchService
 from src.analyzer import GeminiAnalyzer
 from src.notification import NotificationService
+from src.rss_fetcher import fetch_news_from_rss
+
 
 logger = logging.getLogger(__name__)
 
@@ -72,12 +74,12 @@ class NewsDigestPipeline:
 
     def fetch_news(self, topics: Optional[List[str]] = None) -> Dict[str, str]:
         """
-        按话题关键词搜索金融新闻
+        从 RSS 源获取金融新闻
 
-        对每个话题调用 SearchService 搜索，收集原始新闻内容
+        改为使用新浪财经 RSS 而非搜索引擎 API
 
         Args:
-            topics: 话题关键词列表（可选，默认使用配置中的 news_topics）
+            topics: 话题关键词列表（可选，保留参数但不再用于搜索，仅用于过滤）
 
         Returns:
             {话题名称: 该话题的原始新闻文本} 字典
@@ -88,37 +90,79 @@ class NewsDigestPipeline:
         max_articles = self.config.news_max_articles
         topic_news: Dict[str, str] = {}
 
-        if not self.search_service.is_available:
-            logger.warning("搜索服务不可用，无法拉取新闻")
-            return topic_news
+        logger.info(f"开始从 RSS 拉取金融新闻，共 {len(topics)} 个话题...")
 
-        logger.info(f"开始拉取金融新闻，共 {len(topics)} 个话题...")
+        try:
+            # 从 RSS 获取新闻
+            all_news = fetch_news_from_rss(limit_per_source=max_articles)
+            
+            if not all_news:
+                logger.warning("RSS 未获取到任何新闻")
+                return topic_news
 
-        for idx, topic in enumerate(topics):
-            try:
-                # 构建搜索查询（中英文双语增强）
-                query = f"{topic} 最新 金融 新闻 2026年7月"
+            logger.info(f"RSS 共获取 {len(all_news)} 条新闻，开始按话题过滤...")
 
-                logger.info(f"[{idx+1}/{len(topics)}] 搜索话题: {topic}")
-
-                # 逐个搜索引擎尝试
-                news_text = self._search_topic_news(topic, query, max_articles)
-                if news_text:
-                    topic_news[topic] = news_text
-                    logger.info(f"[{idx+1}/{len(topics)}] {topic}: 获取到新闻 ({len(news_text)} 字符)")
+            # 按话题关键词过滤新闻（保留原有话题分类逻辑）
+            for topic in topics:
+                # 话题关键词匹配（包含关键词则归入该话题）
+                filtered = []
+                for news in all_news:
+                    title = news.get("title", "")
+                    # 检查标题是否包含话题关键词或其变体
+                    keywords = self._get_topic_keywords(topic)
+                    if any(kw in title for kw in keywords):
+                        filtered.append(news)
+                
+                if filtered:
+                    # 格式化为文本
+                    lines = [f"## {topic}"]
+                    for i, news in enumerate(filtered[:max_articles], 1):
+                        lines.append(f"\n{i}. **{news.get('title', '')}**")
+                        if news.get('summary'):
+                            lines.append(f"   摘要: {news['summary'][:200]}")
+                        if news.get('source'):
+                            lines.append(f"   来源: {news['source']}")
+                        if news.get('published'):
+                            lines.append(f"   时间: {news['published']}")
+                    topic_news[topic] = "\n".join(lines)
+                    logger.info(f"{topic}: 匹配到 {len(filtered)} 条新闻")
                 else:
-                    logger.warning(f"[{idx+1}/{len(topics)}] {topic}: 未找到相关新闻")
+                    logger.warning(f"{topic}: 未匹配到相关新闻")
 
-                # 话题间短暂延迟，避免请求过快
-                if idx < len(topics) - 1:
-                    time.sleep(1.0)
+            # 如果没有按话题匹配到任何新闻，把全部新闻放在"综合"话题下
+            if not topic_news and all_news:
+                lines = ["## 综合财经要闻"]
+                for i, news in enumerate(all_news[:max_articles * len(topics)], 1):
+                    lines.append(f"\n{i}. **{news.get('title', '')}**")
+                    if news.get('summary'):
+                        lines.append(f"   摘要: {news['summary'][:200]}")
+                    if news.get('source'):
+                        lines.append(f"   来源: {news['source']}")
+                    if news.get('published'):
+                        lines.append(f"   时间: {news['published']}")
+                topic_news["综合"] = "\n".join(lines)
+                logger.warning("没有按话题匹配到新闻，已将全部新闻放入'综合'话题")
 
-            except Exception as e:
-                logger.error(f"[{idx+1}/{len(topics)}] {topic} 搜索失败: {e}")
+        except Exception as e:
+            logger.error(f"RSS 拉取新闻失败: {e}")
 
         total_topics = len(topic_news)
         logger.info(f"新闻拉取完成: {total_topics}/{len(topics)} 个话题成功获取新闻")
         return topic_news
+
+    def _get_topic_keywords(self, topic: str) -> List[str]:
+        """
+        为每个话题生成关键词列表（用于匹配新闻标题）
+        """
+        keyword_map = {
+            "宏观经济": ["宏观", "经济", "GDP", "CPI", "央行", "降息", "降准", "通货膨胀", "就业"],
+            "A股市场": ["A股", "上证", "深证", "创业板", "科创板", "北交所", "两市", "成交额", "涨停", "跌停"],
+            "行业动态": ["行业", "产业", "新能源", "光伏", "芯片", "半导体", "人工智能", "AI", "消费", "医药"],
+            "政策法规": ["政策", "监管", "证监会", "银保监会", "央行", "国务院", "发改委", "财政部", "国资委", "反垄断"],
+            "国际市场": ["美股", "港股", "纳斯达克", "道指", "标普", "恒生", "美联储", "欧股", "日经", "国际"],
+            "公司新闻": ["财报", "业绩", "营收", "净利润", "增持", "减持", "回购", "分红", "融资", "并购", "上市"],
+        }
+        return keyword_map.get(topic, [topic])
 
     def _search_topic_news(self, topic: str, query: str, max_results: int) -> str:
         """
