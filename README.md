@@ -103,7 +103,7 @@
 git clone https://github.com/1391741823/Financial-information.git
 cd Financial-information
 
-# 2. 创建虚拟环境（可选）
+# 2. 创建虚拟环境（推荐）
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
@@ -111,18 +111,30 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # 4. 配置环境变量
-# 创建 .env 文件，填写以下内容：
-# NEWSAPI_KEY=你的Key
-# OPENAI_API_KEY=你的Key
-# FEISHU_WEBHOOK_URL=你的飞书Webhook
-# 其他可选配置...
+# 在项目根目录创建 .env 文件，填写以下内容：
+# NEWSAPI_KEY=你的NewsAPI密钥
+# OPENAI_API_KEY=你的OpenAI兼容API密钥
+# FEISHU_WEBHOOK_URL=你的飞书机器人Webhook地址
+# 其他可选配置请参考 README 中的环境变量表格
 
-# 5. 运行
+# 5. 运行新闻摘要
 python news_main.py
 
+# 构建镜像
+docker build -t financial-news .
+
+## 运行容器（需传入环境变量）
+
+docker run -d \
+  -e NEWSAPI_KEY=你的NewsAPI密钥 \
+  -e OPENAI_API_KEY=你的OpenAI兼容API密钥 \
+  -e FEISHU_WEBHOOK_URL=你的飞书机器人Webhook地址 \
+  --name financial-news \
+  financial-news
+```
 ## 📱 飞书消息示例
 
-```
+
 📰 金融新闻晚报 | 2026-07-16 20:25
 
 🎯 今日要闻: SK海力士美股上市大涨，长鑫科技IPO在即
@@ -164,29 +176,31 @@ python news_main.py
 📅 生成时间: 2026-07-16 20:25 (北京时间)
 🤖 AI 生成，仅供参考，不构成投资建议
 数据来源: NewsAPI
+
+
+##  📁 项目结构
+```
+Financial-information/
+├── news_main.py              # 主程序入口
+├── src/
+│   ├── __init__.py
+│   ├── config.py             # 配置管理
+│   ├── analyzer.py           # AI 分析器（OpenAI/Gemini）
+│   ├── news_digest.py        # 新闻摘要管道（核心逻辑）
+│   ├── rss_fetcher.py        # 新闻获取模块（NewsAPI + 备用源）
+│   ├── notification.py       # 多渠道推送
+│   └── search_service.py     # 搜索服务（兼容旧逻辑）
+├── logs/                     # 日志目录
+├── reports/                  # 生成的报告文件
+├── .github/workflows/
+│   └── news.yml              # GitHub Actions 定时任务配置
+├── requirements.txt          # Python 依赖
+├── .env.example              # 环境变量示例
+└── README.md                 # 项目说明
 ```
 
-## 📁 项目结构
-Financial-information/
-├── news_main.py # 主程序入口
-├── src/
-│ ├── init.py
-│ ├── config.py # 配置管理
-│ ├── analyzer.py # AI 分析器（OpenAI/Gemini）
-│ ├── news_digest.py # 新闻摘要管道（核心逻辑）
-│ ├── rss_fetcher.py # 新闻获取模块（NewsAPI + 备用源）
-│ ├── notification.py # 多渠道推送
-│ └── search_service.py # 搜索服务（兼容旧逻辑）
-├── logs/ # 日志目录
-├── reports/ # 生成的报告文件
-├── .github/workflows/
-│ └── news.yml # GitHub Actions 定时任务配置
-├── requirements.txt # Python 依赖
-├── .env.example # 环境变量示例
-└── README.md # 项目说明
 
-
-## 🗺️ Roadmap
+##  🗺️ Roadmap
 
 - [x] NewsAPI 新闻抓取
 - [x] AI 结构化摘要生成
@@ -198,7 +212,7 @@ Financial-information/
 - [ ] 用户自定义话题关键词
 - [ ] WebUI 配置管理界面
 
-## 🤝 贡献
+##  🤝 贡献
 
 欢迎提交 Issue 和 Pull Request！
 
@@ -215,4 +229,4 @@ Financial-information/
 ---
 
 **如果觉得有用，请给个 ⭐ Star 支持一下！**
-
+```
