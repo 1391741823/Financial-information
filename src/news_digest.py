@@ -343,14 +343,33 @@ class NewsDigestPipeline:
                             lines.append(f"  {art['key_point']}")
 
                         # ================================================================
-                        # 修改开始：来源带链接
-                        # 优先从 art 中获取 link，如果没有则从 self.title_link_map 按标题匹配
+                        # 来源带链接 - 使用多重匹配策略
                         # ================================================================
                         art_title = art.get('title', '')
                         link = art.get('link', '')
+
+                        # 策略1：如果 art 中有 link，直接使用
                         if not link or not link.startswith('http'):
+                            # 策略2：按标题精确匹配
                             if art_title in self.title_link_map:
                                 link = self.title_link_map[art_title]
+
+                        # 策略3：按来源名称匹配（当标题匹配失败时）
+                        if not link or not link.startswith('http'):
+                            source_name = art.get('source', '')
+                            for title, url in self.title_link_map.items():
+                                # 检查来源名称是否在映射表的标题中
+                                if source_name and source_name.lower() in title.lower():
+                                    link = url
+                                    break
+                                # 检查 AI 返回的标题是否在映射表的标题中（子串匹配）
+                                if len(art_title) > 5 and art_title in title:
+                                    link = url
+                                    break
+                                # 检查映射表的标题是否在 AI 返回的标题中
+                                if len(title) > 5 and title in art_title:
+                                    link = url
+                                    break
 
                         source_name = art.get('source', '未知来源')
                         if link and link.startswith('http'):
@@ -362,8 +381,6 @@ class NewsDigestPipeline:
                             lines.append(f"  *来源: [{source_name}]({link})*")
                         elif source_name and not source_name.startswith('['):
                             lines.append(f"  *来源: {source_name}*")
-                        # ================================================================
-                        # 修改结束
                         # ================================================================
 
                     lines.append("")
