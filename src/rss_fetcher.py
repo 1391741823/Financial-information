@@ -17,28 +17,19 @@ NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 SEARCH_QUERY = os.getenv("NEWSAPI_QUERY", "中国 财经 金融 股市 央行")
 
 
-def fetch_news_from_newsapi(limit: int = 20) -> List[Dict[str, str]]:
-    """
-    使用 NewsAPI 获取国内财经新闻
-
-    Args:
-        limit: 最多返回的新闻条数（实际受 API 限制，最多 100）
-
-    Returns:
-        新闻列表，每条包含 title, summary, published, source, link
-        若失败或未配置 Key，返回空列表
-    """
+def fetch_from_newsapi(limit: int = 20) -> List[Dict[str, str]]:
     if not NEWSAPI_KEY:
-        logger.error("NEWSAPI_KEY 未配置，请在环境变量或 GitHub Secrets 中设置")
+        logger.error("NEWSAPI_KEY 未配置")
         return []
 
     try:
+        import requests
         url = "https://newsapi.org/v2/everything"
         params = {
             "q": SEARCH_QUERY,
-            "language": "zh",           # 仅返回中文新闻
-            "sortBy": "publishedAt",    # 按时间排序
-            "pageSize": min(limit, 100),  # 单次请求最大 100 条
+            "language": "zh",
+            "sortBy": "publishedAt",
+            "pageSize": min(limit, 100),
             "apiKey": NEWSAPI_KEY,
         }
         logger.info(f"正在请求 NewsAPI，关键词: {SEARCH_QUERY}")
@@ -60,28 +51,29 @@ def fetch_news_from_newsapi(limit: int = 20) -> List[Dict[str, str]]:
             title = article.get("title")
             if not title:
                 continue
-            # 有时 title 可能包含 " - 来源" 后缀，可以保留
+            # 提取来源和链接
+            source_name = article.get("source", {}).get("name", "NewsAPI")
+            source_url = article.get("url", "")
+            # 如果链接存在，把来源和链接拼接成 Markdown 格式
+            if source_url:
+                source_display = f"[{source_name}]({source_url})"
+            else:
+                source_display = source_name
+            
             news_list.append({
                 "title": title,
                 "summary": article.get("description", "")[:300] if article.get("description") else "",
                 "published": article.get("publishedAt", ""),
-                "source": article.get("source", {}).get("name", "NewsAPI"),
-                "link": article.get("url", "")
+                "source": source_display,  # 直接存为带链接的格式
+                "link": source_url,
             })
 
         logger.info(f"成功从 NewsAPI 获取 {len(news_list)} 条新闻")
         return news_list
 
-    except requests.exceptions.Timeout:
-        logger.error("请求 NewsAPI 超时")
-        return []
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         logger.error(f"请求 NewsAPI 失败: {e}")
         return []
-    except Exception as e:
-        logger.error(f"处理 NewsAPI 响应时出错: {e}")
-        return []
-
 
 def fetch_news_from_rss(limit_per_source: int = 5) -> List[Dict[str, str]]:
     """
