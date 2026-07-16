@@ -167,26 +167,24 @@ python news_main.py
 ```
 
 ## 📁 项目结构
-
-```
 Financial-information/
-├── news_main.py              # 主程序入口
+├── news_main.py # 主程序入口
 ├── src/
-│   ├── __init__.py
-│   ├── config.py             # 配置管理
-│   ├── analyzer.py           # AI 分析器（OpenAI/Gemini）
-│   ├── news_digest.py        # 新闻摘要管道（核心逻辑）
-│   ├── rss_fetcher.py        # 新闻获取模块（NewsAPI + 备用源）
-│   ├── notification.py       # 多渠道推送
-│   └── search_service.py     # 搜索服务（兼容旧逻辑）
-├── logs/                     # 日志目录
-├── reports/                  # 生成的报告文件
+│ ├── init.py
+│ ├── config.py # 配置管理
+│ ├── analyzer.py # AI 分析器（OpenAI/Gemini）
+│ ├── news_digest.py # 新闻摘要管道（核心逻辑）
+│ ├── rss_fetcher.py # 新闻获取模块（NewsAPI + 备用源）
+│ ├── notification.py # 多渠道推送
+│ └── search_service.py # 搜索服务（兼容旧逻辑）
+├── logs/ # 日志目录
+├── reports/ # 生成的报告文件
 ├── .github/workflows/
-│   └── news.yml              # GitHub Actions 定时任务配置
-├── requirements.txt          # Python 依赖
-├── .env.example              # 环境变量示例
-└── README.md                 # 项目说明
-```
+│ └── news.yml # GitHub Actions 定时任务配置
+├── requirements.txt # Python 依赖
+├── .env.example # 环境变量示例
+└── README.md # 项目说明
+
 
 ## 🗺️ Roadmap
 
@@ -218,7 +216,3 @@ Financial-information/
 
 **如果觉得有用，请给个 ⭐ Star 支持一下！**
 
-⚠️ 免责声明
-本项目仅供学习和研究使用，不构成任何投资建议。新闻摘要由 AI 自动生成，可能存在不准确或不完整之处，请以官方信息为准。作者不对使用本项目产生的任何损失负责。
-
-如果觉得有用，请给个 ⭐ Star 支持一下！
