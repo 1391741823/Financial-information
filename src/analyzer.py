@@ -1348,7 +1348,7 @@ class GeminiAnalyzer:
         try:
             config = get_config()
             generation_config = {
-                "temperature": min(config.gemini_temperature, 0.5),  # 摘要任务用较低温度
+                "temperature": 1.0,  # 摘要任务用较低温度
                 "max_output_tokens": 8192,
             }
 
