@@ -866,7 +866,7 @@ class GeminiAnalyzer:
             # 设置生成配置（从配置文件读取温度参数）
             config = get_config()
             generation_config = {
-                "temperature": config.gemini_temperature,
+                "temperature":1.0,
                 "max_output_tokens": 8192,
             }
 
