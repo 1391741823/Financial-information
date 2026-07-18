@@ -1439,6 +1439,11 @@ class GeminiAnalyzer:
                     raise ValueError("OpenAI API 返回空响应")
 
             except Exception as e:
+                if hasattr(e, 'response'):
+                    try:
+                        logger.error(f"完整错误响应: {e.response.text}")
+                    except:
+                        pass
                 error_str = str(e)
                 if attempt == max_retries - 1:
                     raise
