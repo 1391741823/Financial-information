@@ -32,11 +32,21 @@ class NewsDigestPipeline:
     金融新闻摘要管道
 
     流程：
-    1. fetch_news()      — 按话题搜索金融新闻
+    1. fetch_news()      — 按话题搜索金融新闻（RSS + Tavily 补充）
     2. summarize_with_ai() — AI 生成结构化摘要
     3. format_digest()   — 格式化为 Markdown 报告
-    4. run()             — 协调完整流程（拉新闻 → AI 摘要 → 格式化 → 推送）
+    4. run()             — 协调完整流程
     """
+
+    # 每个话题的搜索关键词（用于 Tavily 主动搜索）
+    TOPIC_SEARCH_QUERIES = {
+        "宏观经济": "中国 宏观经济 最新 GDP CPI PMI 央行 货币政策 2026年7月",
+        "A股市场": "A股 股市 上证指数 深证成指 成交额 板块 2026年7月",
+        "行业动态": "行业 动态 新能源 光伏 芯片 半导体 AI 人工智能 消费 医药 2026年7月",
+        "政策法规": "中国 金融 政策 法规 证监会 央行 国务院 发改委 财政部 2026年7月",
+        "国际市场": "美股 港股 纳斯达克 道指 标普 恒生 美联储 大宗商品 2026年7月",
+        "公司新闻": "公司 财报 业绩 营收 净利润 增持 减持 并购 2026年7月",
+    }
 
     def __init__(self, config: Optional[Config] = None):
         """
@@ -80,12 +90,15 @@ class NewsDigestPipeline:
 
     def fetch_news(self, topics: Optional[List[str]] = None) -> Dict[str, str]:
         """
-        从 RSS 源获取金融新闻
+        获取金融新闻（RSS + Tavily 补充搜索）
 
-        改为使用新浪财经 RSS 而非搜索引擎 API
+        流程：
+        1. 先从 RSS 拉取新闻
+        2. 按话题关键词匹配
+        3. 匹配不到的话题，使用 Tavily 主动搜索
 
         Args:
-            topics: 话题关键词列表（可选，保留参数但不再用于搜索，仅用于过滤）
+            topics: 话题关键词列表（可选）
 
         Returns:
             {话题名称: 该话题的原始新闻文本} 字典
@@ -96,29 +109,37 @@ class NewsDigestPipeline:
         max_articles = self.config.news_max_articles
         topic_news: Dict[str, str] = {}
 
-        logger.info(f"开始从 RSS 拉取金融新闻，共 {len(topics)} 个话题...")
+        logger.info(f"开始从 RSS + Tavily 拉取金融新闻，共 {len(topics)} 个话题...")
 
         # 每次拉取新闻前清空映射表，避免上一次的数据残留
         self.title_link_map = {}
 
         try:
-            # 从 RSS 获取新闻
+            # Step 1: 从 RSS 获取新闻
             all_news = fetch_news_from_rss(limit_per_source=max_articles)
 
             if not all_news:
-                logger.warning("RSS 未获取到任何新闻")
+                logger.warning("RSS 未获取到任何新闻，将直接使用 Tavily 搜索")
+                # 如果 RSS 完全没数据，直接用 Tavily 搜索所有话题
+                for topic in topics:
+                    search_result = self._search_topic_with_tavily(topic, max_articles)
+                    if search_result:
+                        topic_news[topic] = search_result
+                        logger.info(f"[Tavily] {topic}: 获取到新闻")
+                    else:
+                        logger.warning(f"[Tavily] {topic}: 搜索未返回结果")
                 return topic_news
 
             logger.info(f"RSS 共获取 {len(all_news)} 条新闻，开始按话题过滤...")
 
-            # 按话题关键词过滤新闻（保留原有话题分类逻辑）
+            # Step 2: 按话题关键词过滤 RSS 新闻
+            matched_topics = set()
             for topic in topics:
-                # 话题关键词匹配（包含关键词则归入该话题）
                 filtered = []
+                keywords = self._get_topic_keywords(topic)
+
                 for news in all_news:
                     title = news.get("title", "")
-                    # 检查标题是否包含话题关键词或其变体
-                    keywords = self._get_topic_keywords(topic)
                     if any(kw in title for kw in keywords):
                         filtered.append(news)
                         # 保存标题→链接映射
@@ -128,7 +149,7 @@ class NewsDigestPipeline:
 
                 if filtered:
                     # 格式化为文本
-                    lines = [f"## {topic}"]
+                    lines = [f"## {topic} (RSS)"]
                     for i, news in enumerate(filtered[:max_articles], 1):
                         lines.append(f"\n{i}. **{news.get('title', '')}**")
                         if news.get('summary'):
@@ -138,13 +159,27 @@ class NewsDigestPipeline:
                         if news.get('published'):
                             lines.append(f"   时间: {news['published']}")
                     topic_news[topic] = "\n".join(lines)
-                    logger.info(f"{topic}: 匹配到 {len(filtered)} 条新闻")
+                    matched_topics.add(topic)
+                    logger.info(f"{topic}: RSS 匹配到 {len(filtered)} 条新闻")
                 else:
-                    logger.warning(f"{topic}: 未匹配到相关新闻")
+                    logger.warning(f"{topic}: RSS 未匹配到相关新闻")
 
-            # 如果没有按话题匹配到任何新闻，把全部新闻放在"综合"话题下
+            # Step 3: 对 RSS 匹配不到的话题，使用 Tavily 主动搜索
+            missing_topics = [t for t in topics if t not in matched_topics]
+            if missing_topics and self.search_service.is_available:
+                logger.info(f"使用 Tavily 补充搜索缺失话题: {', '.join(missing_topics)}")
+                for topic in missing_topics:
+                    search_result = self._search_topic_with_tavily(topic, max_articles)
+                    if search_result:
+                        topic_news[topic] = search_result
+                        logger.info(f"[Tavily] {topic}: 补充搜索成功")
+                    else:
+                        # 如果 Tavily 也搜不到，保留空话题（后续会用综合替代）
+                        logger.warning(f"[Tavily] {topic}: 搜索未返回结果")
+
+            # Step 4: 如果所有话题都没匹配到，把全部新闻放在"综合"话题下
             if not topic_news and all_news:
-                lines = ["## 综合财经要闻"]
+                lines = ["## 综合财经要闻 (RSS)"]
                 for i, news in enumerate(all_news[:max_articles * len(topics)], 1):
                     title = news.get('title', '')
                     lines.append(f"\n{i}. **{title}**")
@@ -162,57 +197,89 @@ class NewsDigestPipeline:
                 logger.warning("没有按话题匹配到新闻，已将全部新闻放入'综合'话题")
 
         except Exception as e:
-            logger.error(f"RSS 拉取新闻失败: {e}")
+            logger.error(f"新闻拉取失败: {e}")
 
         total_topics = len(topic_news)
         logger.info(f"新闻拉取完成: {total_topics}/{len(topics)} 个话题成功获取新闻")
         return topic_news
 
+    def _search_topic_with_tavily(self, topic: str, max_articles: int) -> str:
+        """
+        使用 Tavily 搜索单个话题的新闻
+
+        Args:
+            topic: 话题名称
+            max_articles: 最大文章数
+
+        Returns:
+            格式化的新闻文本，失败返回空字符串
+        """
+        # 获取该话题的搜索关键词
+        query = self.TOPIC_SEARCH_QUERIES.get(topic, f"{topic} 金融 新闻 2026年7月")
+
+        logger.info(f"[Tavily] 搜索 '{topic}': {query}")
+
+        try:
+            # 遍历所有可用的搜索引擎（优先 Tavily）
+            for provider in self.search_service._providers:
+                if not provider.is_available:
+                    continue
+
+                response = provider.search(query, max_results=max_articles)
+
+                if response.success and response.results:
+                    # 格式化为文本
+                    lines = [f"## {topic} ({provider.name} 搜索)"]
+                    for i, result in enumerate(response.results[:max_articles], 1):
+                        title = result.title or "无标题"
+                        snippet = result.snippet or ""
+                        # 截取摘要前300字符
+                        if len(snippet) > 300:
+                            snippet = snippet[:300] + "..."
+                        date_str = f" [{result.published_date}]" if result.published_date else ""
+
+                        lines.append(f"\n{i}. **{title}**{date_str}")
+                        lines.append(f"   来源: {result.source}")
+                        lines.append(f"   摘要: {snippet}")
+
+                        # ================================================================
+                        # 保存标题→链接映射（用于生成可点击链接）
+                        # ================================================================
+                        if title and result.url:
+                            # 如果标题已经存在于映射表中，不覆盖（保持原有 RSS 优先）
+                            if title not in self.title_link_map:
+                                self.title_link_map[title] = result.url
+                            # 同时也保存一个不带来源前缀的版本（便于匹配）
+                            clean_title = re.sub(r'^\[.*?\]\s*', '', title)
+                            if clean_title != title and clean_title not in self.title_link_map:
+                                self.title_link_map[clean_title] = result.url
+
+                    logger.info(f"[Tavily] {topic}: 获取 {len(response.results)} 条结果")
+                    return "\n".join(lines)
+                else:
+                    logger.warning(f"[Tavily] {topic}: 搜索失败 - {response.error_message}")
+
+            # 所有 provider 都失败
+            logger.warning(f"[Tavily] {topic}: 所有搜索引擎均不可用或搜索失败")
+            return ""
+
+        except Exception as e:
+            logger.error(f"[Tavily] {topic} 搜索异常: {e}")
+            return ""
+
     def _get_topic_keywords(self, topic: str) -> List[str]:
         """
-        为每个话题生成关键词列表（用于匹配新闻标题）
+        为每个话题生成关键词列表（用于匹配 RSS 新闻标题）
         """
         keyword_map = {
-            "宏观经济": ["宏观", "经济", "GDP", "CPI", "央行", "降息", "降准", "通货膨胀", "就业"],
+            "宏观经济": ["宏观", "经济", "GDP", "CPI", "央行", "降息", "降准", "通货膨胀", "就业", "PMI"],
             "A股市场": ["A股", "上证", "深证", "创业板", "科创板", "北交所", "两市", "成交额", "涨停", "跌停"],
             "行业动态": ["行业", "产业", "新能源", "光伏", "芯片", "半导体", "人工智能", "AI", "消费", "医药"],
-            "政策法规": ["政策", "监管", "证监会", "银保监会", "央行", "国务院", "发改委", "财政部", "国资委", "反垄断"],
+            "政策法规": ["政策", "监管", "证监会", "银保监会", "央行", "国务院", "发改委", "财政部", "国资委", "反垄断", "法规"],
             "国际市场": ["美股", "港股", "纳斯达克", "道指", "标普", "恒生", "美联储", "欧股", "日经", "国际"],
             "公司新闻": ["财报", "业绩", "营收", "净利润", "增持", "减持", "回购", "分红", "融资", "并购", "上市"],
         }
         return keyword_map.get(topic, [topic])
-
-    def _search_topic_news(self, topic: str, query: str, max_results: int) -> str:
-        """
-        搜索单个话题的新闻并格式化为文本
-
-        Args:
-            topic: 话题名称
-            query: 搜索查询
-            max_results: 最大结果数
-
-        Returns:
-            格式化的新闻文本，失败时返回空字符串
-        """
-        from src.search_service import SearchResponse
-
-        # 尝试所有可用的搜索引擎
-        for provider in self.search_service._providers:
-            if not provider.is_available:
-                continue
-
-            response = provider.search(query, max_results)
-            if response.success and response.results:
-                # 格式化为文本
-                lines = [f"## {topic} ({provider.name} 搜索)"]
-                for i, result in enumerate(response.results, 1):
-                    date_str = f" [{result.published_date}]" if result.published_date else ""
-                    lines.append(f"\n{i}. **{result.title}**{date_str}")
-                    lines.append(f"   来源: {result.source}")
-                    lines.append(f"   摘要: {result.snippet[:300]}")
-                return "\n".join(lines)
-
-        return ""
 
     def summarize_with_ai(
         self,
@@ -436,7 +503,7 @@ class NewsDigestPipeline:
             "",
             f"*📅 生成时间: {date_str} {time_str} (北京时间)*",
             "*🤖 AI 生成，仅供参考，不构成投资建议*",
-            "*数据来源: NewsAPI*",
+            "*数据来源: NewsAPI + Tavily*",
         ])
 
         return "\n".join(lines)
