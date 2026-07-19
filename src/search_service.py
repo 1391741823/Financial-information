@@ -203,15 +203,16 @@ class TavilySearchProvider(BaseSearchProvider):
         try:
             client = TavilyClient(api_key=api_key)
             
-            # 执行搜索（优化：使用advanced深度、限制最近7天）
             response = client.search(
                 query=query,
-                search_depth="advanced",  # advanced 获取更多结果
+                search_depth="advanced",
                 max_results=max_results,
                 include_answer=False,
                 include_raw_content=False,
-                days=7,  # 只搜索最近7天的内容
+                days=3,  # ✅ 改为3天
             )
+            
+            # ... 后续不变
             
             # 记录原始响应到日志
             logger.info(f"[Tavily] 搜索完成，query='{query}', 返回 {len(response.get('results', []))} 条结果")
@@ -295,6 +296,9 @@ class SerpAPISearchProvider(BaseSearchProvider):
                 "engine": "baidu",  # 使用百度搜索
                 "q": query,
                 "api_key": api_key,
+                "sort_by_date": True,   # ✅ 按时间排序
+                "tbs": "qdr:w",          # ✅ 最近一周（百度支持的最小粒度是周）
+                "num": max_results,
             }
             
             search = GoogleSearch(params)
@@ -386,7 +390,7 @@ class BochaSearchProvider(BaseSearchProvider):
             # 请求参数（严格按照API文档）
             payload = {
                 "query": query,
-                "freshness": "oneMonth",  # 搜索近一个月，适合捕获财报、公告等信息
+                "freshness": "threeDays",  # 搜索近一个月，适合捕获财报、公告等信息
                 "summary": True,  # 启用AI摘要
                 "count": min(max_results, 50)  # 最大50条
             }
