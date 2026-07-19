@@ -447,6 +447,7 @@ class GeminiAnalyzer:
                     "title": "新闻标题",
                     "key_point": "一句话要点提炼",
                     "source": "来源",
+                    "url": "原文链接（必须包含完整的 http/https URL）",   # ← 新增
                     "impact": "对市场的潜在影响（利好/利空/中性）"
                 }
             ]
@@ -1066,6 +1067,7 @@ class GeminiAnalyzer:
 """
         
         # 明确的输出要求
+        
         prompt += f"""
 ---
 
@@ -1085,6 +1087,8 @@ class GeminiAnalyzer:
 - **持仓分类建议**：空仓者怎么做 vs 持仓者怎么做
 - **具体狙击点位**：买入价、止损价、目标价（精确到分）
 - **检查清单**：每项用 ✅/⚠️/❌ 标记
+- 每条新闻的 `url` 字段必须填写完整的原文链接，禁止省略或留空。
+- 如果原始内容中没有链接，请填写 "#"。
 
 请输出完整的 JSON 格式决策仪表盘。"""
         
@@ -1461,10 +1465,10 @@ class GeminiAnalyzer:
     def _parse_news_digest_response(self, response_text: str) -> Dict[str, Any]:
         """
         解析新闻摘要 JSON 响应
-
+    
         Args:
             response_text: AI 返回的原始文本
-
+    
         Returns:
             结构化摘要字典
         """
@@ -1474,14 +1478,21 @@ class GeminiAnalyzer:
                 cleaned_text = cleaned_text.replace('```json', '').replace('```', '')
             elif '```' in cleaned_text:
                 cleaned_text = cleaned_text.replace('```', '')
-
+    
             json_start = cleaned_text.find('{')
             json_end = cleaned_text.rfind('}') + 1
-
+    
             if json_start >= 0 and json_end > json_start:
                 json_str = cleaned_text[json_start:json_end]
                 json_str = self._fix_json_string(json_str)
                 data = json.loads(json_str)
+    
+                # ✅ 确保每个 article 都有 url 字段（即使 AI 没输出）
+                for category in data.get('categories', []):
+                    for article in category.get('articles', []):
+                        if 'url' not in article:
+                            article['url'] = ''   # 留空，后续由补链接逻辑填充
+    
                 logger.info(f"新闻摘要 JSON 解析成功，共 {len(data.get('categories', []))} 个分类")
                 return data
             else:
@@ -1498,7 +1509,7 @@ class GeminiAnalyzer:
                     "key_events": [],
                     "looking_ahead": "",
                 }
-
+    
         except json.JSONDecodeError as e:
             logger.warning(f"JSON 解析失败: {e}")
             return {
@@ -1508,8 +1519,6 @@ class GeminiAnalyzer:
                 "key_events": [],
                 "looking_ahead": "",
             }
-
-
 # 便捷函数
 def get_analyzer() -> GeminiAnalyzer:
     """获取 Gemini 分析器实例"""
