@@ -1292,7 +1292,7 @@ class GeminiAnalyzer:
         news_content: str,
         topics: Optional[str] = None,
         custom_instruction: Optional[str] = None,
-        max_chars: int = 4000  # 可调整
+        max_chars: int = 6500  # 可调整
     ) -> Dict[str, Any]:
         """
         对金融新闻进行 AI 摘要
