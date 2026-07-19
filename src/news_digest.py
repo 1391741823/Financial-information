@@ -91,6 +91,17 @@ class NewsDigestPipeline:
     def fetch_news(self, topics: Optional[List[str]] = None) -> Dict[str, str]:
         """
         获取金融新闻（RSS + Tavily 补充搜索）
+
+        流程：
+        1. 先从 RSS 拉取新闻
+        2. 按话题关键词匹配
+        3. 匹配不到的话题，使用 Tavily 主动搜索
+
+        Args:
+            topics: 话题关键词列表（可选）
+
+        Returns:
+            {话题名称: 该话题的原始新闻文本} 字典
         """
         if topics is None:
             topics = self.config.news_topics
@@ -109,6 +120,7 @@ class NewsDigestPipeline:
 
             if not all_news:
                 logger.warning("RSS 未获取到任何新闻，将直接使用 Tavily 搜索")
+                # 如果 RSS 完全没数据，直接用 Tavily 搜索所有话题
                 for topic in topics:
                     search_result = self._search_topic_with_tavily(topic, max_articles)
                     if search_result:
@@ -130,13 +142,13 @@ class NewsDigestPipeline:
                     title = news.get("title", "")
                     if any(kw in title for kw in keywords):
                         filtered.append(news)
-                        # 保存标题→链接映射（升级为字典格式）
+                        # 保存标题→链接映射
                         link = news.get('link', '')
                         if title and link:
-                            source = news.get('source', '')
-                            self.title_link_map[title] = {'url': link, 'source': source}
+                            self.title_link_map[title] = link
 
                 if filtered:
+                    # 格式化为文本
                     lines = [f"## {topic} (RSS)"]
                     for i, news in enumerate(filtered[:max_articles], 1):
                         lines.append(f"\n{i}. **{news.get('title', '')}**")
@@ -162,6 +174,7 @@ class NewsDigestPipeline:
                         topic_news[topic] = search_result
                         logger.info(f"[Tavily] {topic}: 补充搜索成功")
                     else:
+                        # 如果 Tavily 也搜不到，保留空话题（后续会用综合替代）
                         logger.warning(f"[Tavily] {topic}: 搜索未返回结果")
 
             # Step 4: 如果所有话题都没匹配到，把全部新闻放在"综合"话题下
@@ -176,10 +189,10 @@ class NewsDigestPipeline:
                         lines.append(f"   来源: {news['source']}")
                     if news.get('published'):
                         lines.append(f"   时间: {news['published']}")
+                    # 保存标题→链接映射
                     link = news.get('link', '')
                     if title and link:
-                        source = news.get('source', '')
-                        self.title_link_map[title] = {'url': link, 'source': source}
+                        self.title_link_map[title] = link
                 topic_news["综合"] = "\n".join(lines)
                 logger.warning("没有按话题匹配到新闻，已将全部新闻放入'综合'话题")
 
@@ -189,7 +202,7 @@ class NewsDigestPipeline:
         total_topics = len(topic_news)
         logger.info(f"新闻拉取完成: {total_topics}/{len(topics)} 个话题成功获取新闻")
         return topic_news
-       
+
     def _search_topic_with_tavily(self, topic: str, max_articles: int) -> str:
         """
         使用 Tavily 搜索单个话题的新闻
@@ -233,13 +246,13 @@ class NewsDigestPipeline:
                         # 保存标题→链接映射（用于生成可点击链接）
                         # ================================================================
                         if title and result.url:
-                            source = result.source or ''
-                            entry = {'url': result.url, 'source': source}
+                            # 如果标题已经存在于映射表中，不覆盖（保持原有 RSS 优先）
                             if title not in self.title_link_map:
-                                self.title_link_map[title] = entry
+                                self.title_link_map[title] = result.url
+                            # 同时也保存一个不带来源前缀的版本（便于匹配）
                             clean_title = re.sub(r'^\[.*?\]\s*', '', title)
                             if clean_title != title and clean_title not in self.title_link_map:
-                                self.title_link_map[clean_title] = entry    
+                                self.title_link_map[clean_title] = result.url
 
                     logger.info(f"[Tavily] {topic}: 获取 {len(response.results)} 条结果")
                     return "\n".join(lines)
@@ -323,11 +336,11 @@ class NewsDigestPipeline:
     ) -> str:
         """
         将 AI 摘要格式化为 Markdown 报告
-    
+
         Args:
             summary: AI 返回的结构化摘要
             digest_type: 摘要类型（"早报" / "晚报"）
-    
+
         Returns:
             Markdown 格式的摘要报告
         """
@@ -336,13 +349,13 @@ class NewsDigestPipeline:
         now = datetime.now(tz_cn)
         date_str = now.strftime('%Y-%m-%d')
         time_str = now.strftime('%H:%M')
-    
+
         mood_emoji = {
             "乐观": "🟢", "中性": "🟡", "谨慎": "🟠", "悲观": "🔴", "未知": "⚪"
         }
         mood = summary.get("market_mood", "未知")
         mood_display = f"{mood_emoji.get(mood, '⚪')} {mood}"
-    
+
         lines = [
             f"# 📰 金融新闻{digest_type} | {date_str} {time_str}",
             "",
@@ -352,7 +365,7 @@ class NewsDigestPipeline:
             "---",
             "",
         ]
-    
+
         # 分类摘要
         categories = summary.get("categories", [])
         if categories:
@@ -369,14 +382,14 @@ class NewsDigestPipeline:
                 icon = category_icons.get(title, "📌")
                 importance = cat.get("importance", "中")
                 imp_mark = {"高": " 🔴", "中": " 🟡", "低": " ⚪"}.get(importance, "")
-    
+
                 lines.append(f"## {icon} {title}{imp_mark}")
                 lines.append("")
-    
+
                 if cat.get("summary"):
                     lines.append(f"**要点**: {cat['summary']}")
                     lines.append("")
-    
+
                 articles = cat.get("articles", [])
                 if articles:
                     for art in articles:
@@ -387,98 +400,86 @@ class NewsDigestPipeline:
                         )
                         if art.get("key_point"):
                             lines.append(f"  {art['key_point']}")
-    
+
                         # ================================================================
                         # 多重匹配策略：查找链接
                         # ================================================================
                         art_title = art.get('title', '')
                         source_name = art.get('source', '')
                         link = art.get('link', '')
-                        matched_source = ''  # 匹配到的原始来源名
-    
+
                         # 如果 art 中有 link，直接使用
                         if link and link.startswith('http'):
-                            pass
+                            pass  # 已有链接，跳过匹配
                         else:
-                            link = None
-                            matched_entry = None
-    
+                            link = None  # 重置，开始匹配
+
                             # 策略1：精确匹配
                             if art_title in self.title_link_map:
-                                matched_entry = self.title_link_map[art_title]
-    
+                                link = self.title_link_map[art_title]
+
                             # 策略2：去掉常见前缀后再匹配
-                            if not matched_entry:
+                            if not link:
                                 clean_title = art_title
+                                # 去掉常见的开头词
                                 prefixes = ["证监会同意", "央行", "国务院", "财政部", "工信部", "国家"]
                                 for prefix in prefixes:
                                     if art_title.startswith(prefix):
                                         clean_title = art_title[len(prefix):]
                                         break
                                 if clean_title in self.title_link_map:
-                                    matched_entry = self.title_link_map[clean_title]
-    
-                            # 策略3：来源名称匹配
-                            if not matched_entry and source_name:
-                                for title, entry in self.title_link_map.items():
-                                    if isinstance(entry, dict):
-                                        if source_name in entry.get('source', ''):
-                                            matched_entry = entry
-                                            break
-                                    else:
-                                        if source_name in title:
-                                            matched_entry = {'url': entry, 'source': source_name}
-                                            break
-    
-                            # 策略4：子串匹配
-                            if not matched_entry and len(art_title) > 3:
-                                for title, entry in self.title_link_map.items():
+                                    link = self.title_link_map[clean_title]
+
+                            # 策略3：来源名称匹配（如 "36氪" → 找到包含该来源的新闻）
+                            if not link and source_name:
+                                for title, url in self.title_link_map.items():
+                                    if source_name in title:
+                                        link = url
+                                        break
+
+                            # 策略4：子串匹配（AI标题在原始标题中，或反之）
+                            if not link and len(art_title) > 3:
+                                for title, url in self.title_link_map.items():
+                                    # AI标题是原始标题的子串
                                     if art_title in title:
-                                        matched_entry = entry if isinstance(entry, dict) else {'url': entry, 'source': source_name}
+                                        link = url
                                         break
+                                    # 原始标题是AI标题的子串
                                     if len(title) > 5 and title in art_title:
-                                        matched_entry = entry if isinstance(entry, dict) else {'url': entry, 'source': source_name}
+                                        link = url
                                         break
-    
-                            # 策略5：关键词匹配
-                            if not matched_entry:
+
+                            # 策略5：关键词匹配（提取核心词汇）
+                            if not link:
+                                # 提取AI标题中的关键词（去掉常见停用词）
                                 stopwords = ["的", "了", "在", "是", "我", "有", "和", "就", "不", "人", "都", "一", "个", "上", "也", "很", "至", "月", "日", "年"]
                                 keywords = [w for w in art_title if w not in stopwords]
                                 if len(keywords) >= 3:
-                                    for title, entry in self.title_link_map.items():
-                                        if all(kw in title for kw in keywords):
-                                            matched_entry = entry if isinstance(entry, dict) else {'url': entry, 'source': source_name}
+                                    for title, url in self.title_link_map.items():
+                                        # 检查关键词是否都在原始标题中
+                                        matched = all(kw in title for kw in keywords)
+                                        if matched:
+                                            link = url
                                             break
-    
-                            # 提取匹配结果
-                            if matched_entry:
-                                if isinstance(matched_entry, dict):
-                                    link = matched_entry.get('url', '')
-                                    matched_source = matched_entry.get('source', '')
-                                else:
-                                    link = matched_entry
-                                    matched_source = source_name
-    
+
                         # ================================================================
                         # 生成显示
                         # ================================================================
-                        display_source = matched_source if matched_source else source_name
-    
-                        if display_source and display_source.startswith('[') and '](' in display_source:
-                            match = re.search(r'\[([^\]]+)\]\([^)]+\)', display_source)
-                            if match:
-                                display_source = match.group(1)
-    
                         if link and link.startswith('http'):
-                            lines.append(f"  *来源: [{display_source}]({link})*")
-                        elif display_source and not display_source.startswith('['):
-                            lines.append(f"  *来源: {display_source}*")
+                            # 如果 source_name 是 Markdown 格式，提取纯名称
+                            if source_name.startswith('[') and '](' in source_name:
+                                match = re.search(r'\[([^\]]+)\]\([^)]+\)', source_name)
+                                if match:
+                                    source_name = match.group(1)
+                            lines.append(f"  *来源: [{source_name}]({link})*")
+                        elif source_name and not source_name.startswith('['):
+                            lines.append(f"  *来源: {source_name}*")
                         # ================================================================
-    
+
                     lines.append("")
-    
+
                 lines.append("")
-    
+
         # 重点事件
         key_events = summary.get("key_events", [])
         if key_events:
@@ -487,7 +488,7 @@ class NewsDigestPipeline:
             for event in key_events:
                 lines.append(f"- {event}")
             lines.append("")
-    
+
         # 前瞻
         looking_ahead = summary.get("looking_ahead", "")
         if looking_ahead:
@@ -495,7 +496,7 @@ class NewsDigestPipeline:
             lines.append("")
             lines.append(looking_ahead)
             lines.append("")
-    
+
         # 底部
         lines.extend([
             "---",
@@ -504,7 +505,7 @@ class NewsDigestPipeline:
             "*🤖 AI 生成，仅供参考，不构成投资建议*",
             "*数据来源: NewsAPI + Tavily*",
         ])
-    
+
         return "\n".join(lines)
 
     def run(
