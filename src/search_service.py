@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 class SearchResult:
     """搜索结果数据类"""
     title: str
-    snippet: str  # 摘要
+    snippet: str
     url: str
-    source: str  # 来源网站
+    source: str
     published_date: Optional[str] = None
     
     def to_text(self) -> str:
