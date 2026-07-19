@@ -1291,27 +1291,22 @@ class GeminiAnalyzer:
         self,
         news_content: str,
         topics: Optional[str] = None,
-        custom_instruction: Optional[str] = None
+        custom_instruction: Optional[str] = None,
+        max_chars: int = 4000  # 可调整
     ) -> Dict[str, Any]:
         """
         对金融新闻进行 AI 摘要
-
+    
         将原始新闻内容输入 Gemini，生成结构化的新闻摘要 JSON
-
+    
         Args:
             news_content: 原始新闻内容（由 SearchService 拉取的新闻文本）
             topics: 关注的话题标签（如 "宏观经济,A股市场"），用于引导 AI 侧重
             custom_instruction: 额外的自定义指令（如 "重点关注半导体行业"）
-
+            max_chars: 输入新闻内容的最大字符数（超出则截断）
+    
         Returns:
-            结构化摘要字典，格式：
-            {
-                "headline": str,
-                "market_mood": str,
-                "categories": [{title, summary, importance, articles: [...]}],
-                "key_events": [...],
-                "looking_ahead": str
-            }
+            结构化摘要字典
         """
         if not self.is_available():
             logger.warning("AI 分析器不可用，返回空摘要")
@@ -1322,47 +1317,58 @@ class GeminiAnalyzer:
                 "key_events": [],
                 "looking_ahead": "请配置 Gemini API Key 后重试",
             }
-
+    
+        # ====== 内容截断 ======
+        original_len = len(news_content)
+        if original_len > max_chars:
+            # 尝试在最近的换行处截断
+            truncated = news_content[:max_chars]
+            last_newline = truncated.rfind('\n')
+            if last_newline > max_chars * 0.8:
+                truncated = truncated[:last_newline]
+            news_content = truncated + "\n\n... (内容过长已截断，以上为部分摘要)"
+            logger.info(f"新闻内容从 {original_len} 字符截断至 {len(news_content)} 字符")
+        else:
+            logger.info(f"新闻内容长度 {original_len} 字符，在限制范围内")
+    
         # 构建提示词
         topic_hint = f"\n\n## 重点关注话题\n{topics}" if topics else ""
         extra_hint = f"\n\n## 额外要求\n{custom_instruction}" if custom_instruction else ""
-
+    
         prompt = f"""# 金融新闻摘要任务
-
-以下是今天抓取的金融新闻原始内容，请按照系统提示词的要求生成结构化摘要。
-
-{topic_hint}{extra_hint}
-
-## 原始新闻内容
-
-{news_content}
-
----
-
-请输出完整的 JSON 格式新闻摘要。"""
-
+    
+    以下是今天抓取的金融新闻原始内容，请按照系统提示词的要求生成结构化摘要。
+    
+    {topic_hint}{extra_hint}
+    
+    ## 原始新闻内容
+    
+    {news_content}
+    
+    ---
+    
+    请输出完整的 JSON 格式新闻摘要。"""
+    
         logger.info(f"开始 AI 新闻摘要，新闻内容长度: {len(news_content)} 字符")
         prompt_preview = prompt[:500] + "..." if len(prompt) > 500 else prompt
         logger.info(f"[新闻摘要 Prompt 预览]\n{prompt_preview}")
-
+    
         try:
             config = get_config()
             generation_config = {
-                "temperature": 1.0,  # 摘要任务用较低温度
+                "temperature": 1.0,
                 "max_output_tokens": 8192,
             }
-
+    
             start_time = time.time()
-
+    
             if self._use_openai:
-                # OpenAI 兼容 API 路径
                 response_text = self._call_openai_api_with_system_prompt(
                     system_prompt=self.NEWS_DIGEST_SYSTEM_PROMPT,
                     user_prompt=prompt,
                     generation_config=generation_config,
                 )
             else:
-                # Gemini 路径：需要临时切换 system_instruction
                 import google.generativeai as genai
                 model_name = getattr(self, '_current_model_name', None) or config.gemini_model
                 temp_model = genai.GenerativeModel(
@@ -1374,16 +1380,15 @@ class GeminiAnalyzer:
                     generation_config=generation_config,
                     request_options={"timeout": 120}
                 )
-                # 恢复原模型引用（下次 analyze() 仍用股票分析 prompt）
                 response_text = response.text if response and response.text else ""
-
+    
             elapsed = time.time() - start_time
             logger.info(f"AI 新闻摘要完成，耗时 {elapsed:.2f}s，响应长度 {len(response_text)} 字符")
-
+    
             # 解析 JSON
             result = self._parse_news_digest_response(response_text)
             return result
-
+    
         except Exception as e:
             logger.error(f"AI 新闻摘要失败: {e}")
             return {
@@ -1402,19 +1407,19 @@ class GeminiAnalyzer:
     ) -> str:
         """
         使用自定义系统提示词调用 OpenAI 兼容 API
-
+    
         Args:
             system_prompt: 系统提示词
             user_prompt: 用户提示词
             generation_config: 生成配置
-
+    
         Returns:
             响应文本
         """
         config = get_config()
         max_retries = config.gemini_max_retries
         base_delay = config.gemini_retry_delay
-
+    
         for attempt in range(max_retries):
             try:
                 if attempt > 0:
@@ -1422,7 +1427,7 @@ class GeminiAnalyzer:
                     delay = min(delay, 60)
                     logger.info(f"[OpenAI新闻] 第 {attempt + 1} 次重试，等待 {delay:.1f} 秒...")
                     time.sleep(delay)
-
+    
                 response = self._openai_client.chat.completions.create(
                     model=self._current_model_name,
                     messages=[
@@ -1432,18 +1437,25 @@ class GeminiAnalyzer:
                     temperature=generation_config.get('temperature', 0.5),
                     max_tokens=generation_config.get('max_output_tokens', 8192),
                 )
-
+    
                 if response and response.choices and response.choices[0].message.content:
                     return response.choices[0].message.content
                 else:
                     raise ValueError("OpenAI API 返回空响应")
-
+    
             except Exception as e:
+                # 增加完整错误响应输出
                 error_str = str(e)
+                if hasattr(e, 'response') and e.response is not None:
+                    try:
+                        error_body = e.response.text
+                        logger.error(f"[OpenAI新闻] 完整错误响应: {error_body}")
+                    except:
+                        pass
                 if attempt == max_retries - 1:
                     raise
-                logger.warning(f"[OpenAI新闻] API 调用失败: {error_str[:100]}")
-
+                logger.warning(f"[OpenAI新闻] API 调用失败，第 {attempt+1} 次: {error_str[:200]}")
+    
         raise Exception("OpenAI API 调用失败，已达最大重试次数")
 
     def _parse_news_digest_response(self, response_text: str) -> Dict[str, Any]:
