@@ -88,39 +88,27 @@ class NewsDigestPipeline:
         else:
             logger.warning("AI 分析器未启用（未配置 API Key）")
 
-   def fetch_news(self, topics: Optional[List[str]] = None) -> Dict[str, str]:
+    def fetch_news(self, topics: Optional[List[str]] = None) -> Dict[str, str]:
         """
         获取金融新闻（RSS + Tavily 补充搜索）
-    
-        流程：
-        1. 先从 RSS 拉取新闻
-        2. 按话题关键词匹配
-        3. 匹配不到的话题，使用 Tavily 主动搜索
-    
-        Args:
-            topics: 话题关键词列表（可选）
-    
-        Returns:
-            {话题名称: 该话题的原始新闻文本} 字典
         """
         if topics is None:
             topics = self.config.news_topics
-    
+
         max_articles = self.config.news_max_articles
         topic_news: Dict[str, str] = {}
-    
+
         logger.info(f"开始从 RSS + Tavily 拉取金融新闻，共 {len(topics)} 个话题...")
-    
+
         # 每次拉取新闻前清空映射表，避免上一次的数据残留
         self.title_link_map = {}
-    
+
         try:
             # Step 1: 从 RSS 获取新闻
             all_news = fetch_news_from_rss(limit_per_source=max_articles)
-    
+
             if not all_news:
                 logger.warning("RSS 未获取到任何新闻，将直接使用 Tavily 搜索")
-                # 如果 RSS 完全没数据，直接用 Tavily 搜索所有话题
                 for topic in topics:
                     search_result = self._search_topic_with_tavily(topic, max_articles)
                     if search_result:
@@ -129,15 +117,15 @@ class NewsDigestPipeline:
                     else:
                         logger.warning(f"[Tavily] {topic}: 搜索未返回结果")
                 return topic_news
-    
+
             logger.info(f"RSS 共获取 {len(all_news)} 条新闻，开始按话题过滤...")
-    
+
             # Step 2: 按话题关键词过滤 RSS 新闻
             matched_topics = set()
             for topic in topics:
                 filtered = []
                 keywords = self._get_topic_keywords(topic)
-    
+
                 for news in all_news:
                     title = news.get("title", "")
                     if any(kw in title for kw in keywords):
@@ -147,9 +135,8 @@ class NewsDigestPipeline:
                         if title and link:
                             source = news.get('source', '')
                             self.title_link_map[title] = {'url': link, 'source': source}
-    
+
                 if filtered:
-                    # 格式化为文本
                     lines = [f"## {topic} (RSS)"]
                     for i, news in enumerate(filtered[:max_articles], 1):
                         lines.append(f"\n{i}. **{news.get('title', '')}**")
@@ -164,7 +151,7 @@ class NewsDigestPipeline:
                     logger.info(f"{topic}: RSS 匹配到 {len(filtered)} 条新闻")
                 else:
                     logger.warning(f"{topic}: RSS 未匹配到相关新闻")
-    
+
             # Step 3: 对 RSS 匹配不到的话题，使用 Tavily 主动搜索
             missing_topics = [t for t in topics if t not in matched_topics]
             if missing_topics and self.search_service.is_available:
@@ -175,9 +162,8 @@ class NewsDigestPipeline:
                         topic_news[topic] = search_result
                         logger.info(f"[Tavily] {topic}: 补充搜索成功")
                     else:
-                        # 如果 Tavily 也搜不到，保留空话题（后续会用综合替代）
                         logger.warning(f"[Tavily] {topic}: 搜索未返回结果")
-    
+
             # Step 4: 如果所有话题都没匹配到，把全部新闻放在"综合"话题下
             if not topic_news and all_news:
                 lines = ["## 综合财经要闻 (RSS)"]
@@ -190,17 +176,16 @@ class NewsDigestPipeline:
                         lines.append(f"   来源: {news['source']}")
                     if news.get('published'):
                         lines.append(f"   时间: {news['published']}")
-                    # 保存标题→链接映射（升级为字典格式）
                     link = news.get('link', '')
                     if title and link:
                         source = news.get('source', '')
                         self.title_link_map[title] = {'url': link, 'source': source}
                 topic_news["综合"] = "\n".join(lines)
                 logger.warning("没有按话题匹配到新闻，已将全部新闻放入'综合'话题")
-    
+
         except Exception as e:
             logger.error(f"新闻拉取失败: {e}")
-    
+
         total_topics = len(topic_news)
         logger.info(f"新闻拉取完成: {total_topics}/{len(topics)} 个话题成功获取新闻")
         return topic_news
